@@ -102,6 +102,23 @@ export const offerValidator = v.object({
 });
 export type StoredOffer = Infer<typeof offerValidator>;
 
+export const roomOptionValidator = v.object({
+  name: v.string(),
+  nightlyRate: v.number(),
+  mealPlan: v.optional(v.string()),
+  cancellationPolicy: v.optional(v.string()),
+  maxGuests: v.optional(v.number()),
+});
+export type RoomOption = Infer<typeof roomOptionValidator>;
+
+export const bookingStatusValidator = v.union(
+  v.literal("reserved"),
+  v.literal("confirmed"),
+  v.literal("cancelled"),
+  v.literal("completed"),
+);
+export type BookingStatus = Infer<typeof bookingStatusValidator>;
+
 export const metricsValidator = v.object({
   sourcesFound: v.number(),
   sourcesRead: v.number(),
@@ -241,6 +258,67 @@ const schema = defineSchema(
     })
       .index("by_user", ["userId"])
       .index("by_user_result", ["userId", "resultId"]),
+
+    hotels: defineTable({
+      slug: v.string(),
+      name: v.string(),
+      destination: v.string(),
+      locality: v.string(),
+      address: v.string(),
+      brand: v.optional(v.string()),
+      propertyType: v.string(),
+      rating: v.number(),
+      reviews: v.number(),
+      priceFrom: v.number(),
+      currency: v.string(),
+      imageUrl: v.string(),
+      gallery: v.array(v.string()),
+      amenities: v.array(v.string()),
+      description: v.string(),
+      highlights: v.array(v.string()),
+      rooms: v.array(roomOptionValidator),
+      tags: v.array(v.string()),
+      featured: v.boolean(),
+      createdAt: v.number(),
+      updatedAt: v.number(),
+    })
+      .index("by_slug", ["slug"])
+      .index("by_destination", ["destination"])
+      .index("by_price", ["priceFrom"])
+      .index("by_featured", ["featured"]),
+
+    bookings: defineTable({
+      userId: v.id("users"),
+      hotelId: v.id("hotels"),
+      hotelSlug: v.string(),
+      hotelName: v.string(),
+      destination: v.string(),
+      locality: v.string(),
+      imageUrl: v.string(),
+      providerName: v.string(),
+      roomName: v.string(),
+      checkIn: v.string(),
+      checkOut: v.string(),
+      guests: v.number(),
+      rooms: v.number(),
+      nightlyRate: v.number(),
+      totalPrice: v.number(),
+      currency: v.string(),
+      bookingUrl: v.string(),
+      status: bookingStatusValidator,
+      reference: v.string(),
+      contactName: v.string(),
+      contactEmail: v.string(),
+      contactPhone: v.optional(v.string()),
+      specialRequests: v.optional(v.string()),
+      createdAt: v.number(),
+      updatedAt: v.number(),
+    })
+      .index("by_user", ["userId"])
+      .index("by_user_created", ["userId", "createdAt"])
+      .index("by_status", ["status"])
+      .index("by_reference", ["reference"])
+      .index("by_hotel", ["hotelId"]),
 
     auditLogs: defineTable({
       userId: v.optional(v.id("users")),

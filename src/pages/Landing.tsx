@@ -1,12 +1,17 @@
 import { JobiMark } from "@/components/AppShell";
+import { PropertyCard } from "@/components/PropertyCard";
 import { TripSearchBox } from "@/components/TripSearchBox";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { api } from "@/convex/_generated/api";
 import { useAuth } from "@/hooks/use-auth";
+import { useEnsureCatalog } from "@/hooks/use-catalog";
 import { cn } from "@/lib/utils";
+import { useQuery } from "convex/react";
 import { AnimatePresence, motion, useInView, useReducedMotion } from "framer-motion";
 import {
   AlertTriangle,
+  ArrowRight,
   BadgeCheck,
   CalendarDays,
   CreditCard,
@@ -80,7 +85,7 @@ function CountUp({ to, prefix = "", suffix = "", duration = 1.1 }: { to: number;
 }
 
 function StaggeredHeadline() {
-  const words = ["Find", "the", "cheapest", "hotel", "for", "your", "trip."];
+  const words = ["The", "right", "stay,", "at", "a", "verified", "rate."];
   return (
     <h1 className="text-balance font-editorial text-4xl leading-[1.05] text-foreground sm:text-5xl md:text-6xl">
       {words.map((word, index) => (
@@ -91,7 +96,7 @@ function StaggeredHeadline() {
           animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
           transition={{ duration: 0.75, ease: EASE, delay: 0.1 + index * 0.075 }}
         >
-          {word === "cheapest" ? (
+          {word === "verified" ? (
             <span className="relative">
               {word}
               <motion.span
@@ -235,8 +240,8 @@ const STEPS = [
     icon: Search,
   },
   {
-    title: "Book with the provider",
-    body: "You complete the booking on the provider's own website. Jobi never holds your booking or payment.",
+    title: "Reserve, then pay at the property",
+    body: "Jobi holds the reservation and passes your details to the property. Payment is completed on the provider's own page.",
     icon: ExternalLink,
   },
 ];
@@ -257,6 +262,13 @@ const PROVIDERS = [
 export default function Landing() {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
+  useEnsureCatalog();
+
+  const featured = useQuery(api.hotels.list, {
+    featuredOnly: true,
+    sort: "rating",
+    limit: 3,
+  });
 
   const handleSearch = (query: string) => {
     navigate(`/search?q=${encodeURIComponent(query)}`);
@@ -285,6 +297,12 @@ export default function Landing() {
         <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-4 sm:px-8">
           <JobiMark />
           <nav className="flex items-center gap-1 text-sm">
+            <Link
+              to="/hotels"
+              className="rounded-md px-3 py-1.5 text-muted-foreground transition-colors hover:text-foreground"
+            >
+              Properties
+            </Link>
             <a
               href="#how"
               className="hidden rounded-md px-3 py-1.5 text-muted-foreground transition-colors hover:text-foreground sm:block"
@@ -299,7 +317,7 @@ export default function Landing() {
             </a>
             {isAuthenticated ? (
               <Button size="sm" onClick={() => navigate("/dashboard")}>
-                My searches
+                My trips
               </Button>
             ) : (
               <>
@@ -311,8 +329,8 @@ export default function Landing() {
                 >
                   Sign in
                 </Button>
-                <Button size="sm" onClick={() => navigate("/auth?returnTo=%2Fsearch")}>
-                  Start a search
+                <Button size="sm" onClick={() => navigate("/auth?returnTo=%2Fhotels")}>
+                  Book a stay
                 </Button>
               </>
             )}
@@ -331,7 +349,7 @@ export default function Landing() {
               className="inline-flex items-center gap-2 rounded-full border border-border bg-card/70 px-3 py-1"
             >
               <Sparkles className="size-3.5 text-muted-foreground" />
-              <span className="eyebrow">Deep web hotel price research</span>
+              <span className="eyebrow">Smart booking through AI</span>
             </motion.div>
 
             <div className="mt-6">
@@ -344,9 +362,9 @@ export default function Landing() {
               transition={{ duration: 0.7, ease: EASE, delay: 0.7 }}
               className="mt-5 max-w-xl text-pretty text-[1.05rem] leading-7 text-muted-foreground"
             >
-              Tell Jobi what you want. We&apos;ll search across the web, compare available offers,
-              and find the cheapest <em className="font-editorial not-italic">verified</em> option we
-              can find — then send you to the provider to book.
+              Tell Jobi Search what you want. Our engine reads your request, compares published
+              rates across permitted booking sources, and reserves the property with the provider.
+              There is no booking markup, ever.
             </motion.p>
 
             <motion.div
@@ -365,9 +383,9 @@ export default function Landing() {
               className="mt-10 grid max-w-xl grid-cols-3 divide-x divide-border border-y border-border"
             >
               {[
-                { label: "One-time search fee", value: "₹10" },
-                { label: "Verified cheapest result", value: "Yes" },
-                { label: "Booking fee from Jobi", value: "₹0" },
+                { label: "Research fee", value: "₹10" },
+                { label: "Rates verified", value: "Always" },
+                { label: "Booking markup", value: "₹0" },
               ].map((stat) => (
                 <div key={stat.label} className="px-2 py-4 text-center first:pl-0 last:pr-0">
                   <dt className="eyebrow">{stat.label}</dt>
@@ -407,6 +425,36 @@ export default function Landing() {
           </div>
         </div>
       </section>
+
+      {/* Featured properties */}
+      {featured && featured.length > 0 ? (
+        <section className="relative z-10 pb-20">
+          <div className="mx-auto w-full max-w-6xl px-4 sm:px-8">
+            <Reveal>
+              <div className="flex flex-wrap items-end justify-between gap-4">
+                <div>
+                  <p className="eyebrow">The collection</p>
+                  <h2 className="mt-3 max-w-xl font-editorial text-3xl sm:text-4xl">
+                    Properties we would book ourselves.
+                  </h2>
+                </div>
+                <Button asChild variant="outline" className="gap-2">
+                  <Link to="/hotels">
+                    Browse all properties <ArrowRight className="size-4" />
+                  </Link>
+                </Button>
+              </div>
+            </Reveal>
+            <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {featured.map((hotel) => (
+                <Reveal key={hotel._id}>
+                  <PropertyCard hotel={hotel} className="h-full" />
+                </Reveal>
+              ))}
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       {/* How it works */}
       <section id="how" className="relative z-10 border-t border-border bg-card/40 py-20">
@@ -519,7 +567,7 @@ export default function Landing() {
           <Reveal>
             <p className="eyebrow">Trust</p>
             <h2 className="mt-3 max-w-3xl font-editorial text-3xl sm:text-4xl">
-              Jobi is a hotel price research service. We don&apos;t hold your booking or your payment.
+              Jobi Search is a research and booking-assistance service. We never hold your payment.
             </h2>
           </Reveal>
 
@@ -558,8 +606,8 @@ export default function Landing() {
                 <span className="font-medium text-foreground">cheapest verified offer we found</span>{" "}
                 — and we tell you which sources we checked and which we couldn&apos;t.
               </p>
-              <Button onClick={() => navigate(isAuthenticated ? "/search" : "/auth?returnTo=%2Fsearch")}>
-                Find my cheapest stay
+              <Button onClick={() => navigate(isAuthenticated ? "/hotels" : "/auth?returnTo=%2Fhotels")}>
+                Browse the collection
               </Button>
             </div>
           </Reveal>
@@ -570,8 +618,9 @@ export default function Landing() {
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-4 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:px-8">
           <JobiMark />
           <p className="max-w-2xl leading-5">
-            Jobi is a research and comparison tool. Hotel bookings and payments are completed on the
-            provider&apos;s own website. © {new Date().getFullYear()} Jobi AI.
+            Jobi Search is a research and booking-assistance service. Stays are reserved with the
+            property and paid on the provider&apos;s website. © {new Date().getFullYear()} Jobi
+            Search.
           </p>
           <Link to="/auth" className="underline underline-offset-4 hover:text-foreground">
             Sign in

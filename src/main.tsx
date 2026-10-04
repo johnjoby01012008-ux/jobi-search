@@ -15,6 +15,10 @@ const AuthPage = lazy(() => import("./pages/Auth.tsx"));
 const Dashboard = lazy(() => import("./pages/Dashboard.tsx"));
 const SearchPage = lazy(() => import("./pages/Search.tsx"));
 const SearchDetail = lazy(() => import("./pages/SearchDetail.tsx"));
+const Hotels = lazy(() => import("./pages/Hotels.tsx"));
+const HotelDetail = lazy(() => import("./pages/HotelDetail.tsx"));
+const Checkout = lazy(() => import("./pages/Checkout.tsx"));
+const BookingDetail = lazy(() => import("./pages/BookingDetail.tsx"));
 const Admin = lazy(() => import("./pages/Admin.tsx"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 
@@ -126,6 +130,24 @@ createRoot(document.getElementById("root")!).render(
               <Route
                 path="/auth"
                 element={<AuthPage redirectAfterAuth="/dashboard" />}
+              />
+              <Route path="/hotels" element={<Hotels />} />
+              <Route path="/hotels/:slug" element={<HotelDetail />} />
+              <Route
+                path="/checkout"
+                element={
+                  <RequireAuth title="Sign in to reserve this stay">
+                    <Checkout />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/bookings/:id"
+                element={
+                  <RequireAuth title="Sign in to view this reservation">
+                    <BookingDetail />
+                  </RequireAuth>
+                }
               />
               <Route
                 path="/search"

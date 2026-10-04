@@ -23,6 +23,8 @@ export const stats = query({
     if (user?.role !== ROLES.ADMIN) return null;
 
     const searches = await ctx.db.query("searches").order("desc").take(500);
+    const bookings = await ctx.db.query("bookings").order("desc").take(500);
+    const hotels = await ctx.db.query("hotels").take(500);
 
     const paid = searches.filter((s) => s.paidAt !== undefined);
     const completed = searches.filter((s) => s.status === "completed");
@@ -38,7 +40,20 @@ export const stats = query({
             withMetrics.reduce((sum, s) => sum + pick(s), 0) / withMetrics.length,
           );
 
+    const activeBookings = bookings.filter(
+      (b) => b.status === "reserved" || b.status === "confirmed",
+    ).length;
+    const cancelledBookings = bookings.filter((b) => b.status === "cancelled").length;
+    const bookedValue = bookings
+      .filter((b) => b.status !== "cancelled")
+      .reduce((sum, b) => sum + b.totalPrice, 0);
+
     return {
+      totalProperties: hotels.length,
+      totalBookings: bookings.length,
+      activeBookings,
+      cancelledBookings,
+      bookedValue,
       totalSearches: searches.length,
       paidSearches: paid.length,
       completedSearches: completed.length,

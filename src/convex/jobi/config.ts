@@ -14,6 +14,20 @@ export const RESEARCH_BUDGET = {
   maxDurationMs: 120_000,
 } as const;
 
+/** Defaults for the self-hosted SearXNG search layer (overridable by env). */
+export const SEARCH_DEFAULTS = {
+  /** Seconds an identical query is served from cache. */
+  cacheTtlSeconds: 900,
+  /** Per-request timeout in milliseconds. */
+  timeoutMs: 10_000,
+  /** Maximum results kept from a single query. */
+  maxResults: 15,
+} as const;
+
+/** Clean, user-facing message shown when the search layer is unreachable. */
+export const SEARCH_UNAVAILABLE_MESSAGE =
+  "Search is temporarily unavailable. Please try again.";
+
 /** Simple guard against request floods per user. */
 export const RATE_LIMITS = {
   /** Minimum ms between two research runs from the same user. */

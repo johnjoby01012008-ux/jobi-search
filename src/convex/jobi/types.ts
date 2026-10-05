@@ -61,6 +61,14 @@ export interface HotelOffer {
   /** Canonical identity assigned during hotel matching. */
   canonicalHotelName?: string;
   matchConfidence?: Confidence;
+
+  /**
+   * Human-readable ways this offer differs from the cheapest verified offer
+   * (room type, meal plan, cancellation, guests, nights, fees, currency).
+   * Filled in by the comparison step so we never imply two different products
+   * are equivalent.
+   */
+  comparisonDifferences?: string[];
 }
 
 export interface RawSearchResult {
@@ -130,6 +138,8 @@ export interface ComparisonOffer {
   offer: HotelOffer;
   total: number;
   isVerified: boolean;
+  /** How this offer differs from the cheapest verified offer (empty for it). */
+  differences: string[];
 }
 
 export interface Comparison {

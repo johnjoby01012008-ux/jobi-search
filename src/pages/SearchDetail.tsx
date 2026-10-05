@@ -9,6 +9,7 @@ import { buildMapUrl } from "@/convex/jobi/links";
 import { formatDateRange } from "@/convex/jobi/parse";
 import { formatMoney } from "@/convex/jobi/pricing";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import { useMutation, useQuery } from "convex/react";
 import { motion } from "framer-motion";
 import {
@@ -23,6 +24,7 @@ import {
   ExternalLink,
   Heart,
   Loader2,
+  Lock,
   MapPin,
   SearchX,
   Star,
@@ -39,7 +41,6 @@ type ResultRow = {
   canonicalHotelName: string;
   providerName: string;
   roomName?: string;
-  bookingUrl: string;
   sourceUrl: string;
   basePrice?: number;
   taxes?: number;
@@ -55,7 +56,9 @@ type ResultRow = {
   amenities?: string[];
   isCheapestVerified: boolean;
   savingsVsAverage?: number;
-  metadata?: { notes?: string; sourceDomain?: string };
+  /** True until a verified payment unlocks the booking link for this search. */
+  bookingUrlLocked: boolean;
+  metadata?: { notes?: string; sourceDomain?: string; differences?: string[] };
 };
 
 function HotelImage({ src, className }: { src?: string; className?: string }) {
@@ -136,13 +139,27 @@ function PriceComparison({ results }: { results: ResultRow[] }) {
 
       <div className="mt-5 divide-y divide-border/70 border-y border-border/70">
         {verified.map((row) => (
-          <div key={row._id} className="flex items-center justify-between gap-4 py-3">
+          <div key={row._id} className="flex items-start justify-between gap-4 py-3">
             <div className="min-w-0">
               <p className="flex items-center gap-2 truncate text-sm">
                 {row.providerName}
                 <BadgeCheck className="size-3.5 shrink-0 text-emerald-600/80" />
+                {row.isCheapestVerified ? (
+                  <Badge className="gap-1 bg-emerald-600/90 font-normal text-white hover:bg-emerald-600/90">
+                    Best price found
+                  </Badge>
+                ) : null}
               </p>
               <p className="truncate text-xs text-muted-foreground">{row.hotelName}</p>
+              {row.metadata?.differences?.length ? (
+                <ul className="mt-1 space-y-0.5">
+                  {row.metadata.differences.slice(0, 3).map((difference) => (
+                    <li key={difference} className="text-xs text-amber-600/90">
+                      {difference}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
             </div>
             <p className="shrink-0 text-sm font-medium tabular-nums">
               {formatMoney(row.totalPrice, row.currency)}
@@ -283,6 +300,28 @@ export default function SearchDetail() {
   const results = useQuery(api.searches.getResults, { searchId });
   const favoriteIds = useQuery(api.favorites.favoriteIds, { searchId });
   const toggleFavorite = useMutation(api.favorites.toggleFavorite);
+  const revealBookingUrl = useMutation(api.searches.revealBookingUrl);
+
+  // Booking URLs never arrive with the results. They are fetched one-by-one
+  // from the server, which re-checks the verified payment before answering.
+  const [revealed, setRevealed] = useState<Record<string, string>>({});
+  const [revealing, setRevealing] = useState<string | null>(null);
+
+  const handleReveal = async (resultId: Id<"searchResults">) => {
+    setRevealing(resultId);
+    try {
+      const { bookingUrl } = await revealBookingUrl({ resultId });
+      setRevealed((prev) => ({ ...prev, [resultId]: bookingUrl }));
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message.split("\n").filter(Boolean).pop() ?? "Could not reveal the booking link."
+          : "Could not reveal the booking link.";
+      toast.error(message.replace(/^Uncaught (Convex)?Error:\s*/i, ""));
+    } finally {
+      setRevealing(null);
+    }
+  };
 
   if (search === undefined) {
     return (
@@ -496,6 +535,9 @@ export default function SearchDetail() {
                       </span>
                     </p>
                     <div className="mt-3 flex flex-wrap gap-1.5">
+                      <Badge className="gap-1 bg-emerald-600/90 font-normal text-white hover:bg-emerald-600/90">
+                        <BadgeCheck className="size-3.5" /> Best price found
+                      </Badge>
                       <Badge variant="secondary" className="gap-1 font-normal">
                         <BadgeCheck className="size-3.5 text-emerald-600/80" /> Verified offer
                       </Badge>
@@ -538,12 +580,34 @@ export default function SearchDetail() {
                   </div>
 
                   <div className="mt-6">
-                    <Button asChild size="lg" className="w-full gap-2">
-                      <a href={cheapest.bookingUrl} target="_blank" rel="noopener noreferrer">
-                        Search this property on {cheapest.providerName}
-                        <ExternalLink className="size-4" />
-                      </a>
-                    </Button>
+                    {revealed[cheapest._id] ? (
+                      <Button asChild size="lg" className="w-full gap-2">
+                        <a
+                          href={revealed[cheapest._id]}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          Open {cheapest.providerName} booking page
+                          <ExternalLink className="size-4" />
+                        </a>
+                      </Button>
+                    ) : (
+                      <Button
+                        size="lg"
+                        className="w-full gap-2"
+                        disabled={revealing === cheapest._id}
+                        onClick={() => void handleReveal(cheapest._id)}
+                      >
+                        {revealing === cheapest._id ? (
+                          <Loader2 className="size-4 animate-spin" />
+                        ) : (
+                          <Lock className="size-4" />
+                        )}
+                        {cheapest.bookingUrlLocked
+                          ? "Reveal booking link — ₹10"
+                          : "Reveal booking link"}
+                      </Button>
+                    )}
                     <Button asChild variant="outline" className="mt-2 w-full gap-2">
                       <a
                         href={buildMapUrl({
@@ -558,10 +622,9 @@ export default function SearchDetail() {
                       </a>
                     </Button>
                     <p className="mt-3 text-center text-xs text-muted-foreground">
-                      Verified on{" "}
-                      <span className="font-medium text-foreground">{cheapest.providerName}</span> at{" "}
-                      {formatMoney(cheapest.totalPrice, cheapest.currency)}. The button opens a{" "}
-                      {cheapest.providerName} search for this property with your dates.
+                      {revealed[cheapest._id]
+                        ? `Verified on ${cheapest.providerName} at ${formatMoney(cheapest.totalPrice, cheapest.currency)}. Opens a ${cheapest.providerName} search for this property with your dates.`
+                        : "The booking link is kept on the server and only released once your ₹10 payment is verified."}
                     </p>
                   </div>
                 </div>

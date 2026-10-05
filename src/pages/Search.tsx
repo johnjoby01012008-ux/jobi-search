@@ -255,11 +255,9 @@ export default function Search() {
               <span className="font-medium text-foreground">
                 Live web search isn&apos;t connected yet.
               </span>{" "}
-              Searches currently run on clearly-labelled demo data. To search real hotel sources, add
-              an <span className="font-medium text-foreground">EXA_API_KEY</span> (or{" "}
-              <span className="font-medium text-foreground">BRAVE_SEARCH_API_KEY</span> /{" "}
-              <span className="font-medium text-foreground">SERPER_API_KEY</span>) in the project
-              keys.
+              Searches currently run on clearly-labelled demo data. To search real hotel sources,
+              start the self-hosted SearXNG service (`docker compose up -d`) and set{" "}
+              <span className="font-medium text-foreground">SEARXNG_URL</span> in the project keys.
             </p>
           </div>
         ) : null}

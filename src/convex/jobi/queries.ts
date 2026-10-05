@@ -29,6 +29,7 @@ export function generateQueries(
 
   const queries: string[] = [];
 
+  queries.push(`hotels in ${destination} ${ci} ${co} ${guests} guests`);
   queries.push(`${destination} hotels ${ci} ${co} ${guests} guests price`);
   if (locality) {
     queries.push(
@@ -48,9 +49,16 @@ export function generateQueries(
   }
 
   queries.push(`${destination} hotels ${guests} adults ${prefs.join(" ")} booking sites`);
+  // Discover booking sources dynamically. Not every site will be available —
+  // the engine simply continues with whatever the search layer returns.
   queries.push(`site:booking.com ${destination} hotels ${ci}`);
   queries.push(`site:agoda.com ${destination} hotels ${ci}`);
   queries.push(`site:makemytrip.com ${destination} hotels ${ci}`);
+  queries.push(`site:expedia.co.in ${destination} hotels ${ci}`);
+  queries.push(`site:hotels.com ${destination} hotels ${ci}`);
+  queries.push(`site:trip.com ${destination} hotels ${ci}`);
+  queries.push(`site:easemytrip.com ${destination} hotels ${ci}`);
+  queries.push(`${destination} hotel official website booking ${ci} ${co}`);
 
   // Deduplicate while preserving order and respecting the cap.
   const seen = new Set<string>();

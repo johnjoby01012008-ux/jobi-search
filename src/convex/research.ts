@@ -3,7 +3,7 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { internalAction, internalMutation, internalQuery } from "./_generated/server";
 import { normalizeHotelName } from "./jobi/matching";
-import { PRICE_DISCLAIMER } from "./jobi/config";
+import { PRICE_DISCLAIMER, SEARCH_UNAVAILABLE_MESSAGE } from "./jobi/config";
 import { createResearchProvider } from "./jobi/providers";
 import { runResearch } from "./jobi/engine";
 import type { Comparison } from "./jobi/types";
@@ -128,6 +128,7 @@ export const persistResults = internalMutation({
           notes: offer.notes,
           sourceDomain: safeHost(offer.sourceUrl as string),
           matchConfidence: offer.matchConfidence,
+          differences: (offer.comparisonDifferences as string[] | undefined) ?? [],
         },
       });
 
@@ -193,6 +194,17 @@ export const runSearch = internalAction({
           },
         },
       });
+
+      // If every query failed, the search layer itself is unavailable. Fail
+      // with a clean application-level message instead of a confusing partial
+      // result that leaks internals.
+      if (result.metrics.queriesRun === 0) {
+        await ctx.runMutation(internal.research.failSearch, {
+          searchId,
+          error: SEARCH_UNAVAILABLE_MESSAGE,
+        });
+        return;
+      }
 
       const status =
         result.comparison.verified.length === 0 || result.metrics.truncated

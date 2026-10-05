@@ -1,0 +1,76 @@
+# ---------------------------------------------------------------------------
+# Jobi Search — self-hosted SearXNG search layer
+# ---------------------------------------------------------------------------
+#
+# Architecture:
+#
+#   Frontend  ->  Convex backend (Jobi)  ->  searxng (internal)  ->  engines
+#
+# The SearXNG container is reachable by the backend over the `jobi-search`
+# Docker network using the service name `searxng` (http://searxng:8080).
+# It is NEVER exposed publicly: the only published port is bound to 127.0.0.1
+# so you can sanity-check it from the host while developing.
+#
+# Start:  docker compose up -d
+# Health: curl http://localhost:8888/healthz
+# JSON:   curl 'http://localhost:8888/search?q=goa+hotels&format=json'
+# Stop:   docker compose down
+#
+# See docs/SEARXNG.md for the full guide (local dev + VPS deployment).
+
+services:
+  searxng:
+    image: docker.io/searxng/searxng:latest
+    container_name: jobi-searxng
+    restart: unless-stopped
+    environment:
+      # Base URL SearXNG uses to build its own links. Loopback only — the
+      # service is never published to the public internet.
+      - SEARXNG_BASE_URL=http://localhost:8888/
+      # Optional override for the instance secret. If empty, the value from
+      # searxng/settings.yml is used. Change it for production.
+      - SEARXNG_SECRET_KEY=${SEARXNG_SECRET_KEY:-}
+    volumes:
+      - ./searxng:/etc/searxng:rw
+    networks:
+      - jobi-search
+    # Loopback-only publish: useful for local health checks / manual testing.
+    # Remove this block entirely on a VPS so only the backend can reach it.
+    ports:
+      - "127.0.0.1:8888:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # -------------------------------------------------------------------------
+  # Production / VPS deployment notes (uncomment and adapt as needed)
+  # -------------------------------------------------------------------------
+  #
+  # On a VPS you bring the Freebuff backend and SearXNG up on the SAME Docker
+  # network, so the backend talks to SearXNG by service name and SearXNG stays
+  # private. A minimal shape looks like this:
+  #
+  #   convex-backend:
+  #     image: ghcr.io/get-convex/convex-backend:latest
+  #     environment:
+  #       - SEARXNG_URL=http://searxng:8080   # points at the internal service
+  #     networks:
+  #       - jobi-search
+  #
+  # If you keep Convex Cloud as your backend, put SearXNG behind a private
+  # network path your backend can reach (VPN / private tunnel / same VPC) and
+  # set SEARXNG_URL to that private address. Never expose SearXNG to the public
+  # internet and never send its URL to the browser.
+
+networks:
+  jobi-search:
+    name: jobi-search
+    driver: bridge

@@ -127,6 +127,11 @@ export async function runResearch(params: {
 
   await params.hooks?.onStage?.("compare");
   const comparison = buildComparison(matched);
+  // Carry each offer's differences all the way through to persistence so the
+  // UI can explain why a "cheaper" price is not the same product.
+  for (const entry of [...comparison.verified, ...comparison.observed]) {
+    entry.offer.comparisonDifferences = entry.differences;
+  }
 
   await params.hooks?.onStage?.("verify");
 
@@ -142,11 +147,21 @@ export async function runResearch(params: {
   if (!params.provider.live) {
     limitations.push("DEMO DATA: this search used the mock research provider, not live sources.");
   }
+  if (queriesRun === 0 && unavailable.length > 0) {
+    limitations.push("Search is temporarily unavailable. Please try again.");
+  }
   limitations.push(
     "Jobi searched a limited number of permitted sources — this is not full internet coverage.",
   );
 
   const offersVerified = comparison.verified.length;
+  const durationMs = Date.now() - startedAt;
+
+  // Safe structured log: counts and timings only — never secrets or PII.
+  // eslint-disable-next-line no-console
+  console.log(
+    `[research] provider=${params.provider.name} queries=${queriesRun} sources=${rawResults.length} offers=${matched.length} verified=${offersVerified} unavailable=${unavailable.length} durationMs=${durationMs}`,
+  );
 
   return {
     offers: matched,
@@ -164,7 +179,7 @@ export async function runResearch(params: {
       offersVerified,
       comparableOffers: comparison.verified.length + comparison.observed.length,
       cheapestVerified: comparison.cheapestVerified?.total,
-      durationMs: Date.now() - startedAt,
+      durationMs,
       queriesRun,
       truncated,
     },

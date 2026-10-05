@@ -1,0 +1,41 @@
+# SearXNG settings for Jobi Search (internal search layer).
+#
+# `use_default_settings: true` means SearXNG keeps its full default engine set
+# (Google, DuckDuckGo, Bing, Wikipedia, …) and we only override what matters:
+# JSON output, no public limiter, and a sane network timeout.
+
+use_default_settings: true
+
+general:
+  instance_name: "Jobi Search (internal)"
+  debug: false
+  enable_metrics: false
+
+server:
+  # Not a public instance — do not advertise a public base URL.
+  base_url: false
+  # Change this for production (or set SEARXNG_SECRET_KEY / SEARXNG_SECRET).
+  secret_key: "jobi-local-dev-secret-change-me"
+  # The backend calls this service directly, so the public bot limiter must be
+  # off. Repeat searches are de-duplicated by the app's own cache instead.
+  limiter: false
+  image_proxy: false
+  # JSON is what the backend consumes; html keeps manual debugging possible.
+  method: "GET"
+
+search:
+  safe_search: 0
+  autocomplete: ""
+  default_lang: "en"
+  # JSON MUST be listed here or /search?format=json returns 403.
+  formats:
+    - html
+    - json
+
+ui:
+  static_use_hash: true
+
+outgoing:
+  request_timeout: 8.0
+  max_request_timeout: 15.0
+  pool_connections: 100

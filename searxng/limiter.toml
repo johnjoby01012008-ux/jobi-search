@@ -1,0 +1,18 @@
+# Bot-detection / limiter configuration.
+#
+# `server.limiter` is disabled in settings.yml, so this file is only a
+# placeholder that keeps SearXNG's defaults explicit. If you ever re-enable the
+# limiter, add your backend's address to `botdetection.ip_lists.pass_ip` so
+# internal requests are never throttled.
+
+[botdetection.ip_limit]
+link_token = false
+
+[botdetection.ip_lists]
+pass_ip = [
+  "127.0.0.0/8",
+  "172.16.0.0/12",
+  "10.0.0.0/8",
+  "192.168.0.0/16",
+]
+block_ip = []

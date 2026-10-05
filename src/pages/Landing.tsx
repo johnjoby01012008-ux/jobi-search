@@ -1,6 +1,6 @@
 import { JobiMark } from "@/components/AppShell";
 import { PropertyCard } from "@/components/PropertyCard";
-import { TripSearchBox } from "@/components/TripSearchBox";
+import { TripSearchBox, type SearchDetails } from "@/components/TripSearchBox";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
@@ -270,8 +270,12 @@ export default function Landing() {
     limit: 3,
   });
 
-  const handleSearch = (query: string) => {
-    navigate(`/search?q=${encodeURIComponent(query)}`);
+  const handleSearch = (query: string, details: SearchDetails) => {
+    const params = new URLSearchParams({ q: query });
+    if (details.checkIn) params.set("checkIn", details.checkIn);
+    if (details.checkOut) params.set("checkOut", details.checkOut);
+    if (details.guests) params.set("guests", String(details.guests));
+    navigate(`/search?${params.toString()}`);
   };
 
   return (

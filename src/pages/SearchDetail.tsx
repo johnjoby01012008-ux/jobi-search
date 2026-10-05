@@ -5,6 +5,7 @@ import { Separator } from "@/components/ui/separator";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { PRICE_DISCLAIMER } from "@/convex/jobi/config";
+import { buildMapUrl } from "@/convex/jobi/links";
 import { formatDateRange } from "@/convex/jobi/parse";
 import { formatMoney } from "@/convex/jobi/pricing";
 import { cn } from "@/lib/utils";
@@ -539,13 +540,28 @@ export default function SearchDetail() {
                   <div className="mt-6">
                     <Button asChild size="lg" className="w-full gap-2">
                       <a href={cheapest.bookingUrl} target="_blank" rel="noopener noreferrer">
-                        Book for {formatMoney(cheapest.totalPrice, cheapest.currency)}
+                        Search this property on {cheapest.providerName}
                         <ExternalLink className="size-4" />
                       </a>
                     </Button>
+                    <Button asChild variant="outline" className="mt-2 w-full gap-2">
+                      <a
+                        href={buildMapUrl({
+                          hotelName: cheapest.canonicalHotelName,
+                          locality: search.parsed.locality,
+                          destination: search.parsed.destination,
+                        })}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <MapPin className="size-4" /> View this property on the map
+                      </a>
+                    </Button>
                     <p className="mt-3 text-center text-xs text-muted-foreground">
-                      Found on <span className="font-medium text-foreground">{cheapest.providerName}</span>.
-                      You&apos;ll complete the booking on the provider&apos;s website.
+                      Verified on{" "}
+                      <span className="font-medium text-foreground">{cheapest.providerName}</span> at{" "}
+                      {formatMoney(cheapest.totalPrice, cheapest.currency)}. The button opens a{" "}
+                      {cheapest.providerName} search for this property with your dates.
                     </p>
                   </div>
                 </div>

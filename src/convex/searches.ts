@@ -5,12 +5,33 @@ import { parsedQueryValidator } from "./schema";
 import { CURRENCY, initialStages, RATE_LIMITS, SEARCH_FEE_RUPEES } from "./jobi/config";
 import { isValidParsedQuery } from "./jobi/parse";
 import { canAccessRecord } from "./jobi/access";
+import { detectWebSearchConfig } from "./jobi/providers";
 
 async function requireUserId(ctx: Parameters<typeof getAuthUserId>[0]) {
   const userId = await getAuthUserId(ctx);
   if (!userId) throw new ConvexError("You must be signed in.");
   return userId;
 }
+
+/**
+ * Report whether a live web-search provider is actually configured.
+ *
+ * Without an EXA / BRAVE_SEARCH / SERPER key the engine falls back to the mock
+ * provider, so the UI can tell the user honestly whether a run searches real
+ * sources or demo data.
+ */
+export const researchSource = query({
+  args: {},
+  handler: async () => {
+    const forcedDemo =
+      process.env.JOBI_FORCE_DEMO === "1" || process.env.JOBI_FORCE_DEMO === "true";
+    const config = forcedDemo ? null : detectWebSearchConfig(process.env);
+    if (!config) {
+      return { live: false, providerLabel: "Demo data", reason: "no_key" as const };
+    }
+    return { live: true, providerLabel: config.kind, reason: "configured" as const };
+  },
+});
 
 /**
  * Create a draft search (status "created"). No research runs until the ₹10

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { buildMapUrl } from "@/convex/jobi/links";
 import { formatDateRange, nightsBetween } from "@/convex/jobi/parse";
 import { formatMoney } from "@/convex/jobi/pricing";
 import { useMutation, useQuery } from "convex/react";
@@ -185,12 +186,26 @@ export default function BookingDetail() {
                 </p>
                 <Button asChild size="lg" className="mt-5 w-full gap-2">
                   <a href={booking.bookingUrl} target="_blank" rel="noopener noreferrer">
-                    Pay {formatMoney(booking.totalPrice, booking.currency)} on {booking.providerName}
+                    Search this stay on {booking.providerName}
                     <ExternalLink className="size-4" />
                   </a>
                 </Button>
+                <Button asChild variant="outline" className="mt-2 w-full gap-2">
+                  <a
+                    href={buildMapUrl({
+                      hotelName: booking.hotelName,
+                      locality: booking.locality,
+                      destination: booking.destination,
+                    })}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <MapPin className="size-4" /> View this property on the map
+                  </a>
+                </Button>
                 <p className="mt-3 text-center text-xs text-muted-foreground">
-                  Jobi Search never charges for your stay.
+                  Opens a {booking.providerName} search for this property with your dates. Confirm
+                  the final total there — Jobi never charges for your stay.
                 </p>
               </>
             )}

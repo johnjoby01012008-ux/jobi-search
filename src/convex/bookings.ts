@@ -3,6 +3,7 @@ import { ConvexError, v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
+import { buildBookingSearchUrl } from "./jobi/links";
 import { isValidISODate, nightsBetween } from "./jobi/parse";
 import { ROLES } from "./schema";
 
@@ -106,9 +107,15 @@ export const create = mutation({
       nightlyRate: room.nightlyRate,
       totalPrice,
       currency: hotel.currency,
-      bookingUrl: `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(
-        hotel.name,
-      )}&checkin=${args.checkIn}&checkout=${args.checkOut}&group_adults=${guests}&no_rooms=${rooms}`,
+      bookingUrl: buildBookingSearchUrl({
+        hotelName: hotel.name,
+        destination: hotel.destination,
+        locality: hotel.locality,
+        checkIn: args.checkIn,
+        checkOut: args.checkOut,
+        guests,
+        rooms,
+      }),
       status: "reserved",
       reference,
       contactName: args.contactName.trim(),

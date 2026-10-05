@@ -1,3 +1,4 @@
+import { buildBookingSearchUrl } from "../links";
 import type { ParsedQuery, RawSearchResult, ResearchContext, ResearchProvider } from "../types";
 
 /**
@@ -77,16 +78,28 @@ function slugify(value: string): string {
     .replace(/^-|-$/g, "");
 }
 
-function bookingUrlFor(provider: { name: string; domain: string }, parsed: ParsedQuery): string {
-  const { destination, checkIn, checkOut, guests } = parsed;
+function bookingUrlFor(
+  provider: { name: string; domain: string },
+  parsed: ParsedQuery,
+  hotelName: string,
+): string {
+  const { destination, checkIn, checkOut, guests, rooms } = parsed;
   const city = encodeURIComponent(destination);
+  const property = encodeURIComponent(`${hotelName} ${destination}`);
   switch (provider.name) {
     case "Agoda":
-      return `https://www.agoda.com/search?city=${city}&checkIn=${checkIn}&checkOut=${checkOut}&adults=${guests}`;
+      return `https://www.agoda.com/search?textToSearch=${property}&checkIn=${checkIn}&checkOut=${checkOut}&adults=${guests}&rooms=${rooms}`;
     case "Booking.com":
-      return `https://www.booking.com/searchresults.html?ss=${city}&checkin=${checkIn}&checkout=${checkOut}&group_adults=${guests}&no_rooms=${parsed.rooms}`;
+      return buildBookingSearchUrl({
+        hotelName,
+        destination,
+        checkIn,
+        checkOut,
+        guests,
+        rooms,
+      });
     case "MakeMyTrip":
-      return `https://www.makemytrip.com/hotels/hotel-listing/?checkin=${checkIn}&checkout=${checkOut}&city=${city}`;
+      return `https://www.makemytrip.com/hotels/hotel-listing/?searchText=${property}&checkin=${checkIn}&checkout=${checkOut}`;
     case "Goibibo":
       return `https://www.goibibo.com/hotels/hotels-in-${slugify(destination)}-${checkIn}/`;
     case "Cleartrip":
@@ -151,8 +164,8 @@ function buildCatalog(parsed: ParsedQuery): RawSearchResult[] {
 
       results.push({
         title: `${hotelName} — ${provider.name}`,
-        url: bookingUrlFor(provider, parsed),
-        bookingUrl: bookingUrlFor(provider, parsed),
+        url: bookingUrlFor(provider, parsed, hotelName),
+        bookingUrl: bookingUrlFor(provider, parsed, hotelName),
         snippet: observed
           ? `${provider.name} lists ${hotelName} from ₹${total.toLocaleString("en-IN")}. Price shown may not reflect your exact dates.`
           : `${provider.name} shows ${hotelName} at ₹${total.toLocaleString("en-IN")} total for ${nights} nights, ${parsed.guests} guests (taxes included).`,

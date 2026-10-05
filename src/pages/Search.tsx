@@ -1,5 +1,5 @@
 import { AppShell } from "@/components/AppShell";
-import { TripSearchBox } from "@/components/TripSearchBox";
+import { TripSearchBox, type SearchDetails } from "@/components/TripSearchBox";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,10 +23,15 @@ import {
 } from "@/components/ui/select";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { isValidParsedQuery, normalizeParsedQuery, parseTripQuery } from "@/convex/jobi/parse";
+import {
+  isValidISODate,
+  isValidParsedQuery,
+  normalizeParsedQuery,
+  parseTripQuery,
+} from "@/convex/jobi/parse";
 import type { ParsedQuery } from "@/convex/jobi/types";
 import { cn } from "@/lib/utils";
-import { useAction, useMutation } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import {
   AlertTriangle,
   BadgeCheck,
@@ -78,6 +83,11 @@ export default function Search() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const initialQuery = searchParams.get("q") ?? "";
+  const initialCheckIn = searchParams.get("checkIn") ?? "";
+  const initialCheckOut = searchParams.get("checkOut") ?? "";
+  const initialGuests = Number(searchParams.get("guests") ?? "");
+
+  const researchSource = useQuery(api.searches.researchSource);
 
   const parseTrip = useAction(api.aiParse.parseTrip);
   const createSearch = useMutation(api.searches.createSearch);
@@ -100,22 +110,43 @@ export default function Search() {
     currency: string;
   } | null>(null);
 
+  // Explicit dates/guests from the search box (or the URL) always win over
+  // whatever the text parser guessed.
+  const applyOverrides = useCallback(
+    (parsedQuery: ParsedQuery, details?: SearchDetails) => {
+      const next = normalizeParsedQuery(parsedQuery);
+      const checkIn = details?.checkIn ?? initialCheckIn;
+      const checkOut = details?.checkOut ?? initialCheckOut;
+      const guests = details?.guests ?? initialGuests;
+      if (isValidISODate(checkIn)) next.checkIn = checkIn;
+      if (
+        isValidISODate(checkOut) &&
+        (!isValidISODate(checkIn) || new Date(checkOut) > new Date(checkIn))
+      ) {
+        next.checkOut = checkOut;
+      }
+      if (guests >= 1) next.guests = Math.max(1, Math.round(guests));
+      return next;
+    },
+    [initialCheckIn, initialCheckOut, initialGuests],
+  );
+
   const runParse = useCallback(
-    async (text: string) => {
+    async (text: string, details?: SearchDetails) => {
       setParsing(true);
       try {
         const result = await parseTrip({ query: text });
-        setParsed(normalizeParsedQuery(result.parsed as ParsedQuery));
+        setParsed(applyOverrides(result.parsed as ParsedQuery, details));
         setAiUsed(result.aiUsed);
       } catch {
         // The deterministic parser still gives the user something to confirm.
-        setParsed(normalizeParsedQuery(parseTripQuery(text)));
+        setParsed(applyOverrides(parseTripQuery(text), details));
         setAiUsed(false);
       } finally {
         setParsing(false);
       }
     },
-    [parseTrip],
+    [parseTrip, applyOverrides],
   );
 
   const bootstrapped = useRef(false);
@@ -217,6 +248,22 @@ export default function Search() {
   return (
     <AppShell>
       <div className="mx-auto max-w-3xl">
+        {researchSource && !researchSource.live ? (
+          <div className="mb-6 flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 text-sm">
+            <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600" />
+            <p className="text-muted-foreground">
+              <span className="font-medium text-foreground">
+                Live web search isn&apos;t connected yet.
+              </span>{" "}
+              Searches currently run on clearly-labelled demo data. To search real hotel sources, add
+              an <span className="font-medium text-foreground">EXA_API_KEY</span> (or{" "}
+              <span className="font-medium text-foreground">BRAVE_SEARCH_API_KEY</span> /{" "}
+              <span className="font-medium text-foreground">SERPER_API_KEY</span>) in the project
+              keys.
+            </p>
+          </div>
+        ) : null}
+
         {!parsed ? (
           <div>
             <p className="eyebrow">New search</p>
@@ -230,10 +277,13 @@ export default function Search() {
             <div className="mt-8">
               <TripSearchBox
                 initialValue={query}
+                initialCheckIn={initialCheckIn}
+                initialCheckOut={initialCheckOut}
+                initialGuests={initialGuests >= 1 ? initialGuests : 2}
                 autoFocus
-                onSubmit={(text) => {
+                onSubmit={(text, details) => {
                   setQuery(text);
-                  void runParse(text);
+                  void runParse(text, details);
                 }}
               />
             </div>

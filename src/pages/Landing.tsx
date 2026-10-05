@@ -225,9 +225,9 @@ const STEPS = [
     icon: Users,
   },
   {
-    title: "Pay ₹10 once",
-    body: "One fixed fee unlocks the deep search for this exact request. No subscription, no booking fee.",
-    icon: CreditCard,
+    title: "See a quick ad",
+    body: "A short sponsored ad appears before the results — that keeps the search free, with no subscription and no booking fee.",
+    icon: BadgeCheck,
   },
   {
     title: "Jobi searches widely",
@@ -387,7 +387,7 @@ export default function Landing() {
               className="mt-10 grid max-w-xl grid-cols-3 divide-x divide-border border-y border-border"
             >
               {[
-                { label: "Research fee", value: "₹10" },
+                { label: "Research fee", value: "Free" },
                 { label: "Rates verified", value: "Always" },
                 { label: "Booking markup", value: "₹0" },
               ].map((stat) => (
@@ -495,7 +495,7 @@ export default function Landing() {
           <Reveal>
             <p className="eyebrow">Jobi acts like an advisor</p>
             <h2 className="mt-3 font-editorial text-3xl sm:text-4xl">
-              It asks the right questions before it spends your ₹10.
+              It asks the right questions before it shows you a quick ad and your results.
             </h2>
             <p className="mt-5 max-w-lg leading-7 text-muted-foreground">
               Vague requests get vague prices. Jobi reads your request, then shows exactly what it

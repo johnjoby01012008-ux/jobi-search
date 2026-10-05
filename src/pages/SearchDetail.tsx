@@ -11,7 +11,7 @@ import { formatMoney } from "@/convex/jobi/pricing";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useMutation, useQuery } from "convex/react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -20,15 +20,14 @@ import {
   Check,
   Circle,
   Clock,
-  CreditCard,
   ExternalLink,
   Heart,
   Loader2,
-  Lock,
   MapPin,
   SearchX,
   Star,
   Users,
+  X,
 } from "lucide-react";
 import { useState } from "react";
 import { Link, useParams } from "react-router";
@@ -42,6 +41,7 @@ type ResultRow = {
   providerName: string;
   roomName?: string;
   sourceUrl: string;
+  bookingUrl: string;
   basePrice?: number;
   taxes?: number;
   mandatoryFees?: number;
@@ -56,8 +56,6 @@ type ResultRow = {
   amenities?: string[];
   isCheapestVerified: boolean;
   savingsVsAverage?: number;
-  /** True until a verified payment unlocks the booking link for this search. */
-  bookingUrlLocked: boolean;
   metadata?: { notes?: string; sourceDomain?: string; differences?: string[] };
 };
 
@@ -128,7 +126,9 @@ function StageChecklist({
 
 function PriceComparison({ results }: { results: ResultRow[] }) {
   const verified = results.filter((r) => r.priceStatus === "verified");
-  const observed = results.filter((r) => r.priceStatus !== "verified" && r.totalPrice !== undefined);
+  const observed = results.filter(
+    (r) => r.priceStatus !== "verified" && r.totalPrice !== undefined,
+  );
 
   return (
     <div className="rounded-xl border border-border bg-card p-5 shadow-frame sm:p-6">
@@ -257,7 +257,10 @@ function ReportCard({ search }: { search: Doc<"searches"> }) {
             {[
               { label: "Offers found", value: metrics.offersFound },
               { label: "Verified", value: metrics.offersVerified },
-              { label: "Not verified", value: metrics.offersFound - metrics.offersVerified },
+              {
+                label: "Not verified",
+                value: metrics.offersFound - metrics.offersVerified,
+              },
               { label: "Comparable", value: metrics.comparableOffers },
             ].map((stat) => (
               <div key={stat.label}>
@@ -293,6 +296,77 @@ function ReportCard({ search }: { search: Doc<"searches"> }) {
   );
 }
 
+function AdInterstitial({ onDismiss }: { onDismiss: () => void }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-background/85 p-4 backdrop-blur-sm"
+    >
+      <div className="w-full max-w-lg">
+        {/* Paid ad slot — replace the block below with your ad network SDK / markup. */}
+        <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
+          <div className="flex items-center justify-between border-b border-border/70 px-5 py-3">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-2.5 py-0.5 text-[11px] font-medium uppercase tracking-wider text-amber-700">
+              <span className="size-1.5 rounded-full bg-amber-500" />
+              Sponsored
+            </span>
+            <button
+              type="button"
+              onClick={onDismiss}
+              className="rounded-full p-1 text-muted-foreground transition-colors hover:text-foreground"
+              aria-label="Close ad"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
+
+          <div className="bg-gradient-to-br from-amber-50 to-orange-50/40 px-5 py-10 sm:px-8 sm:py-14">
+            {/* Replace this creative with your real paid ad. */}
+            <div className="overflow-hidden rounded-xl bg-background/70 shadow-frame">
+              <div className="aspect-[16/9] bg-gradient-to-tr from-amber-200 via-orange-100 to-rose-100" />
+              <div className="absolute -bottom-4 left-4 right-4">
+                <div className="rounded-xl bg-background/95 p-4 shadow-frame">
+                  <p className="text-sm font-semibold text-foreground">
+                    Your next stay, sorted.
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Compare verified rates across trusted booking sources in seconds — free, thanks to
+                    sponsors like this.
+                  </p>
+                  <div className="mt-4 flex gap-2">
+                    <div className="h-9 w-full rounded-lg bg-amber-500/20 px-3 text-center text-xs font-medium text-amber-700">
+                      Book now
+                    </div>
+                    <div className="h-9 w-2/5 rounded-lg border border-border bg-background/60 px-3 text-center text-xs text-muted-foreground">
+                      Learn more
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <p className="mt-4 text-center text-xs text-muted-foreground">
+              This ad keeps Jobi Search free for everyone.
+            </p>
+          </div>
+
+          <div className="flex gap-3 border-t border-border/70 px-5 py-4">
+            <Button variant="outline" className="flex-1" onClick={onDismiss}>
+              Skip ad
+            </Button>
+            <Button className="flex-1 gap-2" onClick={onDismiss}>
+              <ExternalLink className="size-4" />
+              View my results
+            </Button>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
 export default function SearchDetail() {
   const { id } = useParams<{ id: string }>();
   const searchId = id as Id<"searches">;
@@ -300,28 +374,8 @@ export default function SearchDetail() {
   const results = useQuery(api.searches.getResults, { searchId });
   const favoriteIds = useQuery(api.favorites.favoriteIds, { searchId });
   const toggleFavorite = useMutation(api.favorites.toggleFavorite);
-  const revealBookingUrl = useMutation(api.searches.revealBookingUrl);
 
-  // Booking URLs never arrive with the results. They are fetched one-by-one
-  // from the server, which re-checks the verified payment before answering.
-  const [revealed, setRevealed] = useState<Record<string, string>>({});
-  const [revealing, setRevealing] = useState<string | null>(null);
-
-  const handleReveal = async (resultId: Id<"searchResults">) => {
-    setRevealing(resultId);
-    try {
-      const { bookingUrl } = await revealBookingUrl({ resultId });
-      setRevealed((prev) => ({ ...prev, [resultId]: bookingUrl }));
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message.split("\n").filter(Boolean).pop() ?? "Could not reveal the booking link."
-          : "Could not reveal the booking link.";
-      toast.error(message.replace(/^Uncaught (Convex)?Error:\s*/i, ""));
-    } finally {
-      setRevealing(null);
-    }
-  };
+  const [adDismissed, setAdDismissed] = useState(false);
 
   if (search === undefined) {
     return (
@@ -350,11 +404,15 @@ export default function SearchDetail() {
     );
   }
 
-  const rows = (results ?? []) as ResultRow[];
-  const awaitingPayment = search.status === "created" || search.status === "payment_pending";
+  const rows = (results ?? []) as unknown as ResultRow[];
+  const hasResults = rows.length > 0;
+  const awaitingPayment =
+    search.status === "created" || search.status === "payment_pending";
   const inProgress = ["paid", "researching", "comparing"].includes(search.status);
-  const cheapest = rows.find((row) => row.isCheapestVerified);
-  const verifiedRows = rows.filter((r) => r.priceStatus === "verified" && r.totalPrice !== undefined);
+  const cheapest = hasResults ? rows.find((row) => row.isCheapestVerified) : undefined;
+  const verifiedRows = hasResults
+    ? rows.filter((r) => r.priceStatus === "verified" && r.totalPrice !== undefined)
+    : [];
   const savings = cheapest?.savingsVsAverage ?? 0;
 
   return (
@@ -375,20 +433,25 @@ export default function SearchDetail() {
           <Badge variant="secondary" className="font-normal capitalize">
             {search.status.replace("_", " ")}
           </Badge>
+          {!adDismissed && hasResults ? (
+            <Badge variant="outline" className="text-[10px] uppercase tracking-wider">
+              Ad first
+            </Badge>
+          ) : null}
         </div>
       </div>
 
-      {/* Awaiting payment */}
+      {/* Search not yet run (legacy unpaid searches) */}
       {awaitingPayment ? (
         <div className="rounded-xl border border-border bg-card p-6 text-center sm:p-10">
-          <CreditCard className="mx-auto size-6 text-muted-foreground" />
-          <h1 className="mt-4 font-editorial text-2xl">This search is waiting for payment</h1>
+          <Star className="mx-auto size-6 text-muted-foreground" />
+          <h1 className="mt-4 font-editorial text-2xl">This search hasn&apos;t run yet</h1>
           <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
-            The ₹10 search fee hasn&apos;t been confirmed yet, so no research has run. Complete
-            payment to unlock the deep search for this request.
+            This search was created before the free launch, so no research has run on it yet. Start a
+            new search to see results instantly.
           </p>
           <Button asChild className="mt-6">
-            <Link to="/search">Complete payment</Link>
+            <Link to="/search">Start a free search</Link>
           </Button>
         </div>
       ) : null}
@@ -411,23 +474,25 @@ export default function SearchDetail() {
             <StageChecklist stages={search.stages} />
           </div>
           <div className="mt-8 space-y-1 border-t border-border/70 pt-6 text-sm text-muted-foreground">
-            {["Searching hotel sources…", "Comparing offers…", "Checking prices…", "Checking booking links…", "Finding the cheapest valid option…"].map(
-              (line, index) => {
-                const activeIndex = search.stages.findIndex((s) => s.status === "active");
-                const done = index < (activeIndex === -1 ? search.stages.length : activeIndex);
-                return (
-                  <p
-                    key={line}
-                    className={cn(
-                      "transition-opacity",
-                      done ? "opacity-100" : "opacity-40",
-                    )}
-                  >
-                    {done ? "✓" : "·"} {line}
-                  </p>
-                );
-              },
-            )}
+            {[
+              "Searching hotel sources…",
+              "Comparing offers…",
+              "Checking prices…",
+              "Checking booking links…",
+              "Finding the cheapest valid option…",
+            ].map((line, index) => {
+              const activeIndex = search.stages.findIndex((s) => s.status === "active");
+              const done =
+                index < (activeIndex === -1 ? search.stages.length : activeIndex);
+              return (
+                <p
+                  key={line}
+                  className={cn("transition-opacity", done ? "opacity-100" : "opacity-40")}
+                >
+                  {done ? "✓" : "·"} {line}
+                </p>
+              );
+            })}
           </div>
         </motion.div>
       ) : null}
@@ -446,237 +511,247 @@ export default function SearchDetail() {
         </div>
       ) : null}
 
-      {/* Results */}
+      {/* Results — gated behind the ad interstitial */}
       {!inProgress && !awaitingPayment && search.status !== "failed" ? (
-        <div className="space-y-8">
-          {cheapest ? (
+        <AnimatePresence mode="wait">
+          {hasResults && !adDismissed ? (
+            <AdInterstitial key="ad" onDismiss={() => setAdDismissed(true)} />
+          ) : (
             <motion.div
+              key="results"
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, ease: EASE }}
+              transition={{ duration: 0.5, ease: EASE }}
+              className="space-y-8"
             >
-              <p className="eyebrow">We found your cheapest verified stay</p>
-              <h1 className="mt-3 font-editorial text-3xl sm:text-4xl">
-                {cheapest.canonicalHotelName}
-              </h1>
-            </motion.div>
-          ) : (
-            <div>
-              <p className="eyebrow">Partial result</p>
-              <h1 className="mt-3 font-editorial text-3xl">
-                We found offers, but couldn&apos;t fully verify a price
-              </h1>
-            </div>
-          )}
+              {cheapest ? (
+                <motion.div
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6, ease: EASE }}
+                >
+                  <p className="eyebrow">We found your cheapest verified stay</p>
+                  <h1 className="mt-3 font-editorial text-3xl sm:text-4xl">
+                    {cheapest.canonicalHotelName}
+                  </h1>
+                </motion.div>
+              ) : (
+                <div>
+                  <p className="eyebrow">Partial result</p>
+                  <h1 className="mt-3 font-editorial text-3xl">
+                    We found offers, but couldn&apos;t fully verify a price
+                  </h1>
+                </div>
+              )}
 
-          {cheapest ? (
-            <motion.div
-              initial={{ opacity: 0, y: 18 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, ease: EASE, delay: 0.1 }}
-              className="overflow-hidden rounded-xl border border-border bg-card shadow-frame"
-            >
-              <div className="grid md:grid-cols-[0.9fr_1.1fr]">
-                <HotelImage
-                  src={cheapest.imageUrl}
-                  className="h-52 w-full md:h-full md:min-h-[280px]"
-                />
-                <div className="flex flex-col p-6 sm:p-7">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <h2 className="font-editorial text-2xl">{cheapest.canonicalHotelName}</h2>
-                      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                        {cheapest.rating ? (
-                          <span className="flex items-center gap-1">
-                            <Star className="size-3.5 fill-current" /> {cheapest.rating.toFixed(1)}
-                          </span>
-                        ) : null}
-                        <span className="flex items-center gap-1">
-                          <MapPin className="size-3.5" /> {search.parsed.destination}
-                          {search.parsed.locality ? ` · ${search.parsed.locality}` : ""}
+              {cheapest ? (
+                <motion.div
+                  initial={{ opacity: 0, y: 18 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6, ease: EASE, delay: 0.1 }}
+                  className="overflow-hidden rounded-xl border border-border bg-card shadow-frame"
+                >
+                  <div className="grid md:grid-cols-[0.9fr_1.1fr]">
+                    <HotelImage
+                      src={cheapest.imageUrl}
+                      className="h-52 w-full md:h-full md:min-h-[280px]"
+                    />
+                    <div className="flex flex-col p-6 sm:p-7">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <h2 className="font-editorial text-2xl">
+                            {cheapest.canonicalHotelName}
+                          </h2>
+                          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                            {cheapest.rating ? (
+                              <span className="flex items-center gap-1">
+                                <Star className="size-3.5 fill-current" />{" "}
+                                {cheapest.rating.toFixed(1)}
+                              </span>
+                            ) : null}
+                            <span className="flex items-center gap-1">
+                              <MapPin className="size-3.5" /> {search.parsed.destination}
+                              {search.parsed.locality ? ` · ${search.parsed.locality}` : ""}
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          aria-label="Save to favourites"
+                          onClick={() => void toggleFavorite({ resultId: cheapest._id })}
+                          className={cn(
+                            "rounded-full border p-2 transition-colors",
+                            favoriteIds?.includes(cheapest._id)
+                              ? "border-foreground/30 bg-accent text-accent-foreground"
+                              : "border-border text-muted-foreground hover:text-foreground",
+                          )}
+                        >
+                          <Heart
+                            className={cn(
+                              "size-4",
+                              favoriteIds?.includes(cheapest._id) && "fill-current",
+                            )}
+                          />
+                        </button>
+                      </div>
+
+                      <div className="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">
+                        <span className="flex items-center gap-1.5">
+                          <CalendarDays className="size-3.5" />
+                          {formatDateRange(search.parsed.checkIn, search.parsed.checkOut)}
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          <Users className="size-3.5" /> {search.parsed.guests} guests
                         </span>
                       </div>
-                    </div>
-                    <button
-                      type="button"
-                      aria-label="Save to favourites"
-                      onClick={() => void toggleFavorite({ resultId: cheapest._id })}
-                      className={cn(
-                        "rounded-full border p-2 transition-colors",
-                        favoriteIds?.includes(cheapest._id)
-                          ? "border-foreground/30 bg-accent text-accent-foreground"
-                          : "border-border text-muted-foreground hover:text-foreground",
-                      )}
-                    >
-                      <Heart
-                        className={cn(
-                          "size-4",
-                          favoriteIds?.includes(cheapest._id) && "fill-current",
-                        )}
-                      />
-                    </button>
-                  </div>
 
-                  <div className="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">
-                    <span className="flex items-center gap-1.5">
-                      <CalendarDays className="size-3.5" />
-                      {formatDateRange(search.parsed.checkIn, search.parsed.checkOut)}
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      <Users className="size-3.5" /> {search.parsed.guests} guests
-                    </span>
-                  </div>
-
-                  <div className="mt-6">
-                    <p className="font-editorial text-4xl">
-                      {formatMoney(cheapest.totalPrice, cheapest.currency)}
-                      <span className="ml-2 align-middle text-sm tracking-normal text-muted-foreground">
-                        total
-                      </span>
-                    </p>
-                    <div className="mt-3 flex flex-wrap gap-1.5">
-                      <Badge className="gap-1 bg-emerald-600/90 font-normal text-white hover:bg-emerald-600/90">
-                        <BadgeCheck className="size-3.5" /> Best price found
-                      </Badge>
-                      <Badge variant="secondary" className="gap-1 font-normal">
-                        <BadgeCheck className="size-3.5 text-emerald-600/80" /> Verified offer
-                      </Badge>
-                      {(cheapest.amenities ?? []).slice(0, 4).map((amenity) => (
-                        <Badge key={amenity} variant="outline" className="font-normal capitalize">
-                          {amenity}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="mt-6 rounded-lg border border-border/70 bg-background/60 p-4 text-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground">Room</span>
-                      <span>{formatMoney(cheapest.basePrice, cheapest.currency)}</span>
-                    </div>
-                    <div className="mt-1.5 flex items-center justify-between">
-                      <span className="text-muted-foreground">Taxes</span>
-                      <span>{formatMoney(cheapest.taxes, cheapest.currency)}</span>
-                    </div>
-                    {cheapest.mandatoryFees ? (
-                      <div className="mt-1.5 flex items-center justify-between">
-                        <span className="text-muted-foreground">Mandatory fees</span>
-                        <span>{formatMoney(cheapest.mandatoryFees, cheapest.currency)}</span>
+                      <div className="mt-6">
+                        <p className="font-editorial text-4xl">
+                          {formatMoney(cheapest.totalPrice, cheapest.currency)}
+                          <span className="ml-2 align-middle text-sm tracking-normal text-muted-foreground">
+                            total
+                          </span>
+                        </p>
+                        <div className="mt-3 flex flex-wrap gap-1.5">
+                          <Badge className="gap-1 bg-emerald-600/90 font-normal text-white hover:bg-emerald-600/90">
+                            <BadgeCheck className="size-3.5" /> Best price found
+                          </Badge>
+                          <Badge
+                            variant="secondary"
+                            className="gap-1 font-normal"
+                          >
+                            <BadgeCheck className="size-3.5 text-emerald-600/80" /> Verified offer
+                          </Badge>
+                          {(cheapest.amenities ?? []).slice(0, 4).map((amenity) => (
+                            <Badge
+                              key={amenity}
+                              variant="outline"
+                              className="font-normal capitalize"
+                            >
+                              {amenity}
+                            </Badge>
+                          ))}
+                        </div>
                       </div>
-                    ) : null}
-                    <Separator className="my-2.5" />
-                    <div className="flex items-center justify-between font-medium">
-                      <span>Total</span>
-                      <span className="tabular-nums">
-                        {formatMoney(cheapest.totalPrice, cheapest.currency)}
-                      </span>
-                    </div>
-                    {cheapest.mealPlan ? (
-                      <p className="mt-2 text-xs text-muted-foreground">{cheapest.mealPlan}</p>
-                    ) : null}
-                    {cheapest.cancellationPolicy ? (
-                      <p className="text-xs text-muted-foreground">{cheapest.cancellationPolicy}</p>
-                    ) : null}
-                  </div>
 
-                  <div className="mt-6">
-                    {revealed[cheapest._id] ? (
-                      <Button asChild size="lg" className="w-full gap-2">
-                        <a
-                          href={revealed[cheapest._id]}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                      <div className="mt-6 rounded-lg border border-border/70 bg-background/60 p-4 text-sm">
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground">Room</span>
+                          <span>{formatMoney(cheapest.basePrice, cheapest.currency)}</span>
+                        </div>
+                        <div className="mt-1.5 flex items-center justify-between">
+                          <span className="text-muted-foreground">Taxes</span>
+                          <span>{formatMoney(cheapest.taxes, cheapest.currency)}</span>
+                        </div>
+                        {cheapest.mandatoryFees ? (
+                          <div className="mt-1.5 flex items-center justify-between">
+                            <span className="text-muted-foreground">Mandatory fees</span>
+                            <span>{formatMoney(cheapest.mandatoryFees, cheapest.currency)}</span>
+                          </div>
+                        ) : null}
+                        <Separator className="my-2.5" />
+                        <div className="flex items-center justify-between font-medium">
+                          <span>Total</span>
+                          <span className="tabular-nums">
+                            {formatMoney(cheapest.totalPrice, cheapest.currency)}
+                          </span>
+                        </div>
+                        {cheapest.mealPlan ? (
+                          <p className="mt-2 text-xs text-muted-foreground">{cheapest.mealPlan}</p>
+                        ) : null}
+                        {cheapest.cancellationPolicy ? (
+                          <p className="text-xs text-muted-foreground">
+                            {cheapest.cancellationPolicy}
+                          </p>
+                        ) : null}
+                      </div>
+
+                      <div className="mt-6">
+                        <Button
+                          asChild
+                          size="lg"
+                          className="w-full gap-2"
+                          onClick={() => {
+                            toast.success(
+                              `Opening ${cheapest.providerName} — verified at ${formatMoney(cheapest.totalPrice, cheapest.currency)}.`,
+                            );
+                          }}
                         >
-                          Open {cheapest.providerName} booking page
-                          <ExternalLink className="size-4" />
-                        </a>
-                      </Button>
-                    ) : (
-                      <Button
-                        size="lg"
-                        className="w-full gap-2"
-                        disabled={revealing === cheapest._id}
-                        onClick={() => void handleReveal(cheapest._id)}
-                      >
-                        {revealing === cheapest._id ? (
-                          <Loader2 className="size-4 animate-spin" />
-                        ) : (
-                          <Lock className="size-4" />
-                        )}
-                        {cheapest.bookingUrlLocked
-                          ? "Reveal booking link — ₹10"
-                          : "Reveal booking link"}
-                      </Button>
-                    )}
-                    <Button asChild variant="outline" className="mt-2 w-full gap-2">
-                      <a
-                        href={buildMapUrl({
-                          hotelName: cheapest.canonicalHotelName,
-                          locality: search.parsed.locality,
-                          destination: search.parsed.destination,
-                        })}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        <MapPin className="size-4" /> View this property on the map
-                      </a>
-                    </Button>
-                    <p className="mt-3 text-center text-xs text-muted-foreground">
-                      {revealed[cheapest._id]
-                        ? `Verified on ${cheapest.providerName} at ${formatMoney(cheapest.totalPrice, cheapest.currency)}. Opens a ${cheapest.providerName} search for this property with your dates.`
-                        : "The booking link is kept on the server and only released once your ₹10 payment is verified."}
+                          <a
+                            href={cheapest.bookingUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            Open {cheapest.providerName} booking page
+                            <ExternalLink className="size-4" />
+                          </a>
+                        </Button>
+                        <Button asChild variant="outline" className="mt-2 w-full gap-2">
+                          <a
+                            href={buildMapUrl({
+                              hotelName: cheapest.canonicalHotelName,
+                              locality: search.parsed.locality,
+                              destination: search.parsed.destination,
+                            })}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            <MapPin className="size-4" /> View this property on the map
+                          </a>
+                        </Button>
+                        <p className="mt-3 text-center text-xs text-muted-foreground">
+                          Free search — the booking link opens directly from the result.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              ) : null}
+
+              {savings > 0 && cheapest ? (
+                <div className="grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-3">
+                  <div className="bg-card p-5">
+                    <p className="eyebrow">Average verified alternative</p>
+                    <p className="mt-2 font-editorial text-2xl">
+                      {formatMoney((cheapest.totalPrice ?? 0) + savings, cheapest.currency)}
+                    </p>
+                  </div>
+                  <div className="bg-card p-5">
+                    <p className="eyebrow">Cheapest verified</p>
+                    <p className="mt-2 font-editorial text-2xl">
+                      {formatMoney(cheapest.totalPrice, cheapest.currency)}
+                    </p>
+                  </div>
+                  <div className="bg-accent p-5">
+                    <p className="eyebrow">You could save</p>
+                    <p className="mt-2 font-editorial text-2xl">
+                      {formatMoney(savings, cheapest.currency)}
                     </p>
                   </div>
                 </div>
+              ) : null}
+
+              <PriceComparison results={rows} />
+
+              {verifiedRows.length === 0 ? (
+                <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-5 text-sm">
+                  <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600" />
+                  <p className="text-muted-foreground">
+                    Jobi found offers but none could be verified against your exact dates, guests and
+                    room. We&apos;d rather tell you that than present an unverified price as the
+                    cheapest. Try widening your dates or budget.
+                  </p>
+                </div>
+              ) : null}
+
+              <ReportCard search={search} />
+
+              <div className="rounded-xl border border-border bg-card/60 p-5 text-sm leading-6 text-muted-foreground">
+                {PRICE_DISCLAIMER}
               </div>
             </motion.div>
-          ) : null}
-
-          {savings > 0 && cheapest ? (
-            <div className="grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-3">
-              <div className="bg-card p-5">
-                <p className="eyebrow">Average verified alternative</p>
-                <p className="mt-2 font-editorial text-2xl">
-                  {formatMoney(
-                    (cheapest.totalPrice ?? 0) + savings,
-                    cheapest.currency,
-                  )}
-                </p>
-              </div>
-              <div className="bg-card p-5">
-                <p className="eyebrow">Cheapest verified</p>
-                <p className="mt-2 font-editorial text-2xl">
-                  {formatMoney(cheapest.totalPrice, cheapest.currency)}
-                </p>
-              </div>
-              <div className="bg-accent p-5">
-                <p className="eyebrow">You could save</p>
-                <p className="mt-2 font-editorial text-2xl">
-                  {formatMoney(savings, cheapest.currency)}
-                </p>
-              </div>
-            </div>
-          ) : null}
-
-          <PriceComparison results={rows} />
-
-          {verifiedRows.length === 0 ? (
-            <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-5 text-sm">
-              <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600" />
-              <p className="text-muted-foreground">
-                Jobi found offers but none could be verified against your exact dates, guests and
-                room. We&apos;d rather tell you that than present an unverified price as the cheapest.
-                Try widening your dates or budget.
-              </p>
-            </div>
-          ) : null}
-
-          <ReportCard search={search} />
-
-          <div className="rounded-xl border border-border bg-card/60 p-5 text-sm leading-6 text-muted-foreground">
-            {PRICE_DISCLAIMER}
-          </div>
-        </div>
+          )}
+        </AnimatePresence>
       ) : null}
     </AppShell>
   );

@@ -3,11 +3,11 @@ import { ConvexError, v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { parsedQueryValidator } from "./schema";
-import { CURRENCY, initialStages, RATE_LIMITS, SEARCH_FEE_RUPEES } from "./jobi/config";
+import { CURRENCY, initialStages, RATE_LIMITS } from "./jobi/config";
 import { isValidParsedQuery } from "./jobi/parse";
 import { canAccessRecord } from "./jobi/access";
-import { canRevealBookingUrl, redactSearchResults } from "./jobi/urlLock";
 import { detectSearXNGConfig } from "./jobi/providers";
 
 async function requireUserId(ctx: Parameters<typeof getAuthUserId>[0]) {
@@ -37,8 +37,11 @@ export const researchSource = query({
 });
 
 /**
- * Create a draft search (status "created"). No research runs until the ₹10
- * payment is verified, so this is cheap and free for the user.
+ * Create a free search and start the deep research immediately.
+ *
+ * The search is free — there is no ₹10 payment gate. Results include the
+ * booking URLs, and the first click through the ad interstitial reveals them
+ * to the user (see `SearchDetail`).
  */
 export const createSearch = mutation({
   args: {
@@ -77,9 +80,9 @@ export const createSearch = mutation({
       userId,
       query: trimmed,
       parsed,
-      status: "created",
+      status: "paid",
       stages: initialStages(),
-      amountPaid: SEARCH_FEE_RUPEES,
+      amountPaid: 0,
       currency: CURRENCY,
       demoMode: false,
       createdAt: now,
@@ -91,6 +94,12 @@ export const createSearch = mutation({
       action: "search_created",
       detail: `${parsed.destination} ${parsed.checkIn}→${parsed.checkOut}`,
       createdAt: now,
+    });
+
+    // Run the deep search immediately — the search is free, so there is no
+    // payment gate to wait on. The scheduler keeps the HTTP path fast.
+    await ctx.scheduler.runAfter(0, internal.research.runSearch, {
+      searchId,
     });
 
     return searchId;
@@ -127,10 +136,12 @@ export const listSearches = query({
 /**
  * Results for a search, cheapest verified first, then observed.
  *
- * IMPORTANT: booking URLs are stripped out before the rows leave the server.
- * The client must call `revealBookingUrl` — which re-checks the verified
- * payment — to obtain the actual link. Hiding the URL in the UI would not be
- * enough; it is never sent to an unpaid client in the first place.
+ * The search is free. Ownership is still enforced server-side, but booking
+ * URLs are now included in the result rows so the client can open them.
+ *
+ * The *reveal* of a booking link is still presented behind an ad interstitial
+ * in the UI (see `SearchDetail`), so the monetisation step sits between the
+ * user and the provider link rather than behind a payment.
  */
 export const getResults = query({
   args: { searchId: v.id("searches") },
@@ -139,39 +150,25 @@ export const getResults = query({
     if (!userId) return [];
     const search = await ctx.db.get(searchId);
     if (!canAccessRecord(search, userId)) return [];
-    const unlocked = await hasVerifiedPayment(ctx, searchId, userId);
     const results = await ctx.db
       .query("searchResults")
       .withIndex("by_search", (q) => q.eq("searchId", searchId))
       .collect();
-    const sorted = results.sort((a, b) => {
+    return results.sort((a, b) => {
       if (a.isCheapestVerified !== b.isCheapestVerified) return a.isCheapestVerified ? -1 : 1;
       const rank = (s: string) => (s === "verified" ? 0 : s === "observed" ? 1 : 2);
       if (rank(a.priceStatus) !== rank(b.priceStatus)) return rank(a.priceStatus) - rank(b.priceStatus);
       return (a.totalPrice ?? Infinity) - (b.totalPrice ?? Infinity);
     });
-    return redactSearchResults(sorted, unlocked);
   },
 });
 
-/** True only when a server-verified, paid payment exists for the search. */
-async function hasVerifiedPayment(
-  ctx: QueryCtx,
-  searchId: Id<"searches">,
-  userId: Id<"users">,
-): Promise<boolean> {
-  const search = await ctx.db.get(searchId);
-  const payment = await ctx.db
-    .query("searchPayments")
-    .withIndex("by_search", (q) => q.eq("searchId", searchId))
-    .first();
-  return canRevealBookingUrl(payment, search, userId);
-}
-
 /**
- * Return the booking URL for one result — only if the ₹10 payment for its
- * search has been verified server-side. This is the ONLY path that ever emits a
- * booking URL to the client.
+ * Return the booking URL for one result.
+ *
+ * The search is free and the URL is already included in `getResults`, but the
+ * UI still routes the first click through this mutation so every reveal is
+ * audit-logged server-side (`booking_url_revealed`).
  */
 export const revealBookingUrl = mutation({
   args: { resultId: v.id("searchResults") },
@@ -180,17 +177,6 @@ export const revealBookingUrl = mutation({
     const result = await ctx.db.get(resultId);
     if (!result || result.userId !== userId) {
       throw new ConvexError("That result could not be found.");
-    }
-    const search = await ctx.db.get(result.searchId);
-    const payment = await ctx.db
-      .query("searchPayments")
-      .withIndex("by_search", (q) => q.eq("searchId", result.searchId))
-      .first();
-
-    if (!canRevealBookingUrl(payment, search, userId)) {
-      throw new ConvexError(
-        "Complete the ₹10 payment to reveal this booking link.",
-      );
     }
 
     await ctx.db.insert("auditLogs", {

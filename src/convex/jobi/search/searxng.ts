@@ -122,7 +122,6 @@ interface CacheEntry {
 }
 
 function defaultLogger(event: Record<string, unknown>): void {
-  // eslint-disable-next-line no-console
   console.log(`[searxng] ${JSON.stringify(event)}`);
 }
 

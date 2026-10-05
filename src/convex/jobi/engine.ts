@@ -158,7 +158,6 @@ export async function runResearch(params: {
   const durationMs = Date.now() - startedAt;
 
   // Safe structured log: counts and timings only — never secrets or PII.
-  // eslint-disable-next-line no-console
   console.log(
     `[research] provider=${params.provider.name} queries=${queriesRun} sources=${rawResults.length} offers=${matched.length} verified=${offersVerified} unavailable=${unavailable.length} durationMs=${durationMs}`,
   );

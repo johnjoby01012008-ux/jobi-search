@@ -291,3 +291,54 @@ When using convex, make sure:
 - This includes importing generated files like `@/convex/_generated/server`, `@/convex/_generated/api`
 - Remember to import functions like useQuery, useMutation, useAction, etc. from `convex/react`
 - NEVER have return type validators.
+
+# Self-hosted search layer (SearXNG)
+
+Jobi Search runs its own [SearXNG](https://docs.searxng.org/) instance as the
+only live search layer — **no paid search API and no Brave/Tavily/Serper/Google
+key**. The full guide (setup, operations, pipeline, security and VPS
+deployment) lives in [`docs/SEARXNG.md`](docs/SEARXNG.md); the essentials:
+
+```bash
+# 1. Start SearXNG (internal only; loopback publish for local checks)
+docker compose up -d
+
+# 2. Point the backend at it. The platform protects .env.example, so copy the
+#    shipped template instead (it documents SEARXNG_URL, SEARCH_*, PAYMENT_MODE).
+cp env.example .env        # SEARXNG_URL=http://localhost:8888  (host dev)
+
+# 3. Check health / test the JSON API
+curl -s http://localhost:8888/healthz
+curl -s 'http://localhost:8888/search?q=hotels+in+Goa&format=json'
+bunx convex run searchWeb:searxngHealth
+
+# 4. Stop
+docker compose down
+```
+
+Architecture: `Frontend → Jobi backend (Convex) → SearXNG (internal) → engines`.
+The SearXNG URL lives only in the backend `SEARXNG_URL` env var and is never
+sent to the browser. On a VPS run the backend on the same Docker network and use
+`SEARXNG_URL=http://searxng:8080`, removing the published port.
+
+## Environment variables
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `SEARXNG_URL` | — | Internal SearXNG base URL (required for live search). |
+| `SEARCH_CACHE_TTL` | `900` | Seconds an identical query is cached. |
+| `SEARCH_TIMEOUT` | `10000` | Per-request timeout (ms). |
+| `SEARXNG_MAX_RESULTS` | `15` | Max results kept per query. |
+| `SEARXNG_LANGUAGE` / `SEARXNG_CATEGORIES` | `en` / `general` | Passed to SearXNG. |
+| `SEARXNG_SECRET_KEY` | dev placeholder | SearXNG instance secret (change for prod). |
+| `PAYMENT_MODE` | `mock` | `mock` demo verifier, or `razorpay` later. |
+| `JOBI_FORCE_DEMO` | — | `1` forces the mock provider. |
+
+`.env` is gitignored. Never commit real secrets.
+
+## Tests
+
+```bash
+bun run test        # vitest — SearXNG transport/normalization + booking-lock suites
+bunx convex dev --once && bunx tsc -b --noEmit
+```

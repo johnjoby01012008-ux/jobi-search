@@ -321,6 +321,11 @@ The SearXNG URL lives only in the backend `SEARXNG_URL` env var and is never
 sent to the browser. On a VPS run the backend on the same Docker network and use
 `SEARXNG_URL=http://searxng:8080`, removing the published port.
 
+Repeated searches are cached twice: in-process inside `SearXNGClient`, and in a
+shared `searchCache` Convex table so de-duplication holds across all workers and
+deployments (`SEARCH_CACHE_TTL` seconds). Empty and failed results are never
+cached. Purge with `bunx convex run searchCache:clear`.
+
 ## Environment variables
 
 | Variable | Default | Purpose |

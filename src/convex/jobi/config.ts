@@ -28,6 +28,16 @@ export const SEARCH_DEFAULTS = {
 export const SEARCH_UNAVAILABLE_MESSAGE =
   "Search is temporarily unavailable. Please try again.";
 
+/** Shared cache TTL in seconds, read from `SEARCH_CACHE_TTL`. */
+export function searchCacheTtlSeconds(
+  env: Record<string, string | undefined> = {},
+): number {
+  const parsed = Number.parseInt(env.SEARCH_CACHE_TTL ?? "", 10);
+  return Number.isFinite(parsed) && parsed > 0
+    ? parsed
+    : SEARCH_DEFAULTS.cacheTtlSeconds;
+}
+
 /** Simple guard against request floods per user. */
 export const RATE_LIMITS = {
   /** Minimum ms between two research runs from the same user. */

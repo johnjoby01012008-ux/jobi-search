@@ -3,7 +3,8 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { internalAction, internalMutation, internalQuery } from "./_generated/server";
 import { normalizeHotelName } from "./jobi/matching";
-import { PRICE_DISCLAIMER, SEARCH_UNAVAILABLE_MESSAGE } from "./jobi/config";
+import { PRICE_DISCLAIMER, SEARCH_UNAVAILABLE_MESSAGE, searchCacheTtlSeconds } from "./jobi/config";
+import { CachedResearchProvider, type SharedSearchCache } from "./jobi/providers/cachedProvider";
 import { createResearchProvider } from "./jobi/providers";
 import { runResearch } from "./jobi/engine";
 import type { Comparison } from "./jobi/types";
@@ -184,10 +185,30 @@ export const runSearch = internalAction({
 
     const { provider, demoMode } = createResearchProvider(process.env);
 
+    // Wrap the live provider in the shared, cross-worker cache so identical
+    // queries are only sent to SearXNG once per TTL window. The mock provider
+    // needs no caching (it is generated in-process already).
+    const sharedCache: SharedSearchCache = {
+      get: async (key) => (await ctx.runQuery(internal.searchCache.getEntry, { key })) ?? null,
+      set: async (key, query, results, ttlSeconds) => {
+        await ctx.runMutation(internal.searchCache.putEntry, {
+          key,
+          query,
+          results,
+          ttlSeconds,
+        });
+      },
+    };
+    const searchProvider = demoMode
+      ? provider
+      : new CachedResearchProvider(provider, sharedCache, {
+          ttlSeconds: searchCacheTtlSeconds(process.env),
+        });
+
     try {
       const result = await runResearch({
         parsed: search.parsed,
-        provider,
+        provider: searchProvider,
         hooks: {
           onStage: async (key) => {
             await ctx.runMutation(internal.research.markStage, { searchId, key });

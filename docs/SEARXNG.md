@@ -31,6 +31,8 @@ the container is not published to the public internet.
 | `src/convex/jobi/search/searxng.ts` | The only module that talks to SearXNG (`searchWeb`). |
 | `src/convex/jobi/search/price.ts` | Price/rating extraction from untrusted text. |
 | `src/convex/jobi/providers/searxngProvider.ts` | Turns search results into offers. |
+| `src/convex/jobi/providers/cachedProvider.ts` | Cross-worker cache decorator around the live provider. |
+| `src/convex/searchCache.ts` | Table-backed shared cache (`searchCache` table). |
 | `src/convex/searchWeb.ts` | Internal, secret-free health/debug actions. |
 
 ---
@@ -101,6 +103,9 @@ Or exercise the exact backend path with a raw query:
 
 ```bash
 bunx convex run searchWeb:debugSearch '{"query":"hotels in Goa December 12 2026 December 15 2026 2 guests"}'
+
+# Purge the shared search cache
+bunx convex run searchCache:clear
 ```
 
 `debugSearch` returns only `{ ok, count, latencyMs, results[] }` — no
@@ -173,7 +178,11 @@ search ─► results shown (no URL) ─► ₹10 verified ─► revealBookingU
 - Rate limiting: max 30 searches/user/hour and a 15s minimum gap between runs.
 - Identical queries are cached (default `SEARCH_CACHE_TTL=900`s) and concurrent
   identical requests are de-duplicated, so 20 users searching the same trip do
-  not trigger 20 upstream searches.
+  not trigger 20 upstream searches. Caching happens at two levels:
+  an in-process map inside `SearXNGClient`, plus a **shared `searchCache`
+  Convex table** (`CachedResearchProvider`) so de-duplication holds across every
+  worker and deployment, not just a single process. Empty and failed results are
+  never cached, so an outage surfaces immediately instead of being pinned.
 - Only `https:` URLs on real public hosts are kept; `javascript:`, `data:`,
   IP-literal and localhost links are dropped, and booking links must pass the
   provider allowlist in `src/convex/jobi/urlSafety.ts`.
@@ -240,7 +249,12 @@ bunx convex dev --once && bunx tsc -b --noEmit
 ```
 
 The suites cover connection, `searchWeb()`, timeout, malformed responses, hotel
-normalization, price extraction, duplicate results, cheapest-result selection,
-unavailable booking sources, payment not completed / completed, and booking-URL
-protection. Because CI/sandboxes often lack Docker, the transport tests use an
-injected fake `fetchImpl` and clock rather than a live container.
+normalization, price extraction, duplicate results, cross-worker caching,
+cheapest-result selection, unavailable booking sources, payment not completed /
+completed, and booking-URL protection.
+
+`src/convex/jobi/__tests__/infra.test.ts` additionally guards the Docker setup
+itself: JSON output enabled, no public port publish, healthcheck present, no
+hardcoded SearXNG address anywhere in `src/`, and the search client kept out of
+the frontend bundle. Because CI/sandboxes often lack Docker, the transport tests
+use an injected fake `fetchImpl` and clock rather than a live container.

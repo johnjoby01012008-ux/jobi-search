@@ -320,6 +320,19 @@ const schema = defineSchema(
       .index("by_reference", ["reference"])
       .index("by_hotel", ["hotelId"]),
 
+    // Shared, cross-worker search cache. Keyed by the normalised query so that
+    // 20 users searching the same trip hit SearXNG once, even when the request
+    // is served by a different Convex worker or deployment.
+    searchCache: defineTable({
+      key: v.string(),
+      query: v.string(),
+      results: v.any(),
+      expiresAt: v.number(),
+      createdAt: v.number(),
+    })
+      .index("by_key", ["key"])
+      .index("by_expires", ["expiresAt"]),
+
     auditLogs: defineTable({
       userId: v.optional(v.id("users")),
       searchId: v.optional(v.id("searches")),

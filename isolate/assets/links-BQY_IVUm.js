@@ -1,0 +1,1 @@
+function a({hotelName:o,locality:e,destination:n}){const r=[o,e,n].map(t=>(t??"").trim()).filter(Boolean).join(", ");return`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(r)}`}export{a as b};

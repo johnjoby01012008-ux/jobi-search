@@ -1,0 +1,1 @@
+import{l as o,b as r}from"./index-DvVvYSM-.js";import{r as a}from"./react-vendor-DzeyujRg.js";let e=!1;function i(){const t=o(r.hotels.ensureCatalog);a.useEffect(()=>{if(e)return;const s=window.setTimeout(()=>{t({}).then(()=>{e=!0}).catch(()=>{e=!1})},0);return()=>window.clearTimeout(s)},[t])}export{i as u};

@@ -1,0 +1,43 @@
+# ---------------------------------------------------------------------------
+# Jobi Search — Fly.io deployment for the self-hosted SearXNG search layer.
+# ---------------------------------------------------------------------------
+#
+# Why Fly: the Convex Cloud backend runs outside this repo/sandbox, so it needs
+# a STABLE, PUBLIC HTTPS address to reach SearXNG. Fly runs the official
+# SearXNG container as-is and gives it a public *.fly.dev endpoint.
+#
+# Deploy (run from this `searxng/` directory):
+#   fly apps create jobi-searxng        # once; the name must be globally unique
+#   fly secrets set SEARXNG_SECRET="$(openssl rand -hex 32)"
+#   fly deploy
+#   curl https://jobi-searxng.fly.dev/healthz
+#
+# Then wire it into the backend (from the project root):
+#   bunx convex env set SEARXNG_URL https://jobi-searxng.fly.dev
+#
+# NOTE: change `app` below to any globally-unique name you like, and update the
+# SEARXNG_BASE_URL + the SEARXNG_URL you set on Convex to match.
+# ---------------------------------------------------------------------------
+
+app = "jobi-searxng"
+primary_region = "sin"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  # SearXNG uses this to build its own absolute links.
+  SEARXNG_BASE_URL = "https://jobi-searxng.fly.dev/"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # Keep one machine warm: a cold start can exceed the backend's 10s
+  # SEARCH_TIMEOUT and would surface as "search unavailable".
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

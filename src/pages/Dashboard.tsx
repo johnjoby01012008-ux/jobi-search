@@ -163,7 +163,7 @@ export default function Dashboard() {
           ) : searches.length === 0 ? (
             <EmptyState
               title="No price searches yet"
-              body="Describe a trip and Jobi researches permitted booking sources for ₹10, then reports the cheapest verified total."
+              body="Describe a trip and Jobi researches permitted booking sources for free, then reports the cheapest verified total. A sponsored ad appears while it works."
               action={{ label: "Start a price search", to: "/search" }}
             />
           ) : (

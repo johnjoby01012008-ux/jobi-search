@@ -1,15 +1,5 @@
 import { AppShell } from "@/components/AppShell";
 import { TripSearchBox, type SearchDetails } from "@/components/TripSearchBox";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,41 +21,8 @@ import {
 } from "@/convex/jobi/parse";
 import type { ParsedQuery } from "@/convex/jobi/types";
 import { cn } from "@/lib/utils";
-import { useAction, useMutation, useQuery } from "convex/react";
-import {
-  AlertTriangle,
-  BadgeCheck,
-  CalendarDays,
-  CreditCard,
-  Loader2,
-  MapPin,
-  Pencil,
-  Search as SearchIcon,
-  Sparkles,
-  Users,
-  Wallet,
-  X,
-} from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
-
-declare global {
-  interface Window {
-    Razorpay?: new (options: Record<string, unknown>) => { open: () => void };
-  }
-}
-
-function loadRazorpayScript(): Promise<boolean> {
-  return new Promise((resolve) => {
-    if (window.Razorpay) return resolve(true);
-    const script = document.createElement("script");
-    script.src = "https://checkout.razorpay.com/v1/checkout.js";
-    script.onload = () => resolve(true);
-    script.onerror = () => resolve(false);
-    document.body.appendChild(script);
-  });
-}
+import { useAction, useMutation } from "convex/react";
 
 function parseErrorMessage(error: unknown): string {
   if (error instanceof Error) {
@@ -78,6 +35,22 @@ function parseErrorMessage(error: unknown): string {
   }
   return "Something went wrong. Please try again.";
 }
+import {
+  AlertTriangle,
+  BadgeCheck,
+  CalendarDays,
+  Loader2,
+  MapPin,
+  Pencil,
+  Search as SearchIcon,
+  Sparkles,
+  Users,
+  Wallet,
+  X,
+} from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router";
+
 
 export default function Search() {
   const navigate = useNavigate();
@@ -87,14 +60,8 @@ export default function Search() {
   const initialCheckOut = searchParams.get("checkOut") ?? "";
   const initialGuests = Number(searchParams.get("guests") ?? "");
 
-  const researchSource = useQuery(api.searches.researchSource);
-
   const parseTrip = useAction(api.aiParse.parseTrip);
   const createSearch = useMutation(api.searches.createSearch);
-  const initiatePayment = useMutation(api.payments.initiatePayment);
-  const confirmDemoPayment = useMutation(api.payments.confirmDemoPayment);
-  const verifyRazorpay = useAction(api.razorpayActions.verifyRazorpayPayment);
-  const createRazorpayOrder = useAction(api.razorpayActions.createRazorpayOrder);
 
   const [query, setQuery] = useState(initialQuery);
   const [parsed, setParsed] = useState<ParsedQuery | null>(null);
@@ -103,12 +70,6 @@ export default function Search() {
   const [submitting, setSubmitting] = useState(false);
   const [editing, setEditing] = useState(false);
   const [preferenceDraft, setPreferenceDraft] = useState("");
-  const [demoPayment, setDemoPayment] = useState<{
-    paymentId: Id<"searchPayments">;
-    searchId: Id<"searches">;
-    amount: number;
-    currency: string;
-  } | null>(null);
 
   // Explicit dates/guests from the search box (or the URL) always win over
   // whatever the text parser guessed.
@@ -175,57 +136,12 @@ export default function Search() {
     setPreferenceDraft("");
   };
 
-  const handleUnlock = async () => {
+  const handleSearch = async () => {
     if (!parsed || !valid) return;
     setSubmitting(true);
     try {
       const searchId = await createSearch({ query, parsed });
-      const payment = await initiatePayment({ searchId });
-
-      if (payment.mode === "demo") {
-        setDemoPayment({
-          paymentId: payment.paymentId,
-          searchId,
-          amount: payment.amount,
-          currency: payment.currency,
-        });
-        return;
-      }
-
-      // Live Razorpay flow — server verifies the signature before unlocking.
-      const order = await createRazorpayOrder({ paymentId: payment.paymentId });
-      const loaded = await loadRazorpayScript();
-      if (!loaded || !window.Razorpay) {
-        toast.error("Could not load the payment window. Please retry.");
-        return;
-      }
-      const checkout = new window.Razorpay({
-        key: order.keyId,
-        order_id: order.orderId,
-        amount: payment.amount * 100,
-        currency: payment.currency,
-        name: "Jobi AI",
-        description: "One-time deep hotel search",
-        handler: async (response: {
-          razorpay_order_id: string;
-          razorpay_payment_id: string;
-          razorpay_signature: string;
-        }) => {
-          try {
-            await verifyRazorpay({
-              paymentId: payment.paymentId,
-              razorpayOrderId: response.razorpay_order_id,
-              razorpayPaymentId: response.razorpay_payment_id,
-              signature: response.razorpay_signature,
-            });
-            navigate(`/searches/${searchId}`);
-          } catch {
-            toast.error("Payment verification failed. You have not been charged for a search.");
-          }
-        },
-        theme: { color: "#2d2a26" },
-      });
-      checkout.open();
+      navigate(`/searches/${searchId}`);
     } catch (error) {
       toast.error(parseErrorMessage(error));
     } finally {
@@ -233,22 +149,10 @@ export default function Search() {
     }
   };
 
-  const handleConfirmDemo = async () => {
-    if (!demoPayment) return;
-    try {
-      await confirmDemoPayment({ paymentId: demoPayment.paymentId });
-      const searchId = demoPayment.searchId;
-      setDemoPayment(null);
-      navigate(`/searches/${searchId}`);
-    } catch (error) {
-      toast.error(parseErrorMessage(error));
-    }
-  };
-
   return (
     <AppShell>
       <div className="mx-auto max-w-3xl">
-        {researchSource && !researchSource.live ? (
+        {false ? (
           <div className="mb-6 flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 text-sm">
             <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600" />
             <p className="text-muted-foreground">
@@ -269,8 +173,8 @@ export default function Search() {
               Describe your trip in your own words.
             </h1>
             <p className="mt-3 max-w-xl leading-7 text-muted-foreground">
-              Destination, dates, guests, locality and budget. Understanding your request is free —
-              you only pay ₹10 when you unlock the deep search.
+              Destination, dates, guests, locality and budget. Understanding your request is free,
+              and so is the search — Jobi is kept free by the sponsored ads you'll see while it works.
             </p>
             <div className="mt-8">
               <TripSearchBox
@@ -520,20 +424,20 @@ export default function Search() {
               </div>
             ) : null}
 
-            {/* Payment card */}
+            {/* Free search card (no payment, no Razorpay) */}
             <div className="rounded-xl border border-border bg-card p-5 shadow-frame sm:p-6">
               <div className="flex items-start justify-between gap-6">
                 <div>
                   <h2 className="font-editorial text-xl">Find me the cheapest hotel</h2>
                   <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">
                     Jobi will search multiple permitted sources and compare available offers for your
-                    exact dates, guests and requirements — then unlock the cheapest verified option
+                    exact dates, guests and requirements — then show you the cheapest verified option
                     it can find.
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="font-editorial text-3xl">₹10</p>
-                  <p className="eyebrow mt-1">one-time search fee</p>
+                  <p className="font-editorial text-3xl">Free</p>
+                  <p className="eyebrow mt-1">no search fee</p>
                 </div>
               </div>
 
@@ -555,17 +459,18 @@ export default function Search() {
                 className="mt-6 w-full gap-2"
                 size="lg"
                 disabled={!valid || submitting}
-                onClick={handleUnlock}
+                onClick={handleSearch}
               >
                 {submitting ? (
                   <Loader2 className="size-4 animate-spin" />
                 ) : (
-                  <CreditCard className="size-4" />
+                  <SearchIcon className="size-4" />
                 )}
-                Find My Cheapest Stay — ₹10
+                Find My Cheapest Stay — Free
               </Button>
               <p className="mt-3 text-center text-xs text-muted-foreground">
-                One ₹10 fee is tied to this single search. Jobi never takes a booking payment.
+                Free search — a sponsored ad appears while Jobi researches, and again between the
+                results.
               </p>
             </div>
 
@@ -583,51 +488,6 @@ export default function Search() {
           </div>
         )}
       </div>
-
-      <AlertDialog open={demoPayment !== null} onOpenChange={(open) => !open && setDemoPayment(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <div className="flex items-center gap-2">
-              <Badge variant="outline" className="gap-1 text-[10px] uppercase tracking-wider">
-                <Sparkles className="size-3" /> Demo mode
-              </Badge>
-            </div>
-            <AlertDialogTitle className="font-editorial">Confirm your ₹10 search</AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <div className="space-y-3 text-sm text-muted-foreground">
-                <p>
-                  Live payment keys aren&apos;t configured, so Jobi is running a clearly-labelled
-                  demo checkout. This simulates a successful ₹10 payment, verified on the server,
-                  and unlocks the deep search exactly once.
-                </p>
-                <div className="flex items-center justify-between rounded-lg border border-border bg-background px-4 py-3">
-                  <span>Deep search · one-time fee</span>
-                  <span className="font-medium text-foreground">
-                    ₹{(demoPayment?.amount ?? 10).toLocaleString("en-IN")}
-                  </span>
-                </div>
-                <p className="text-xs">
-                  To take real payments, add RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET to the project
-                  keys. The server verifies the payment signature before any search runs.
-                </p>
-              </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className={cn("gap-2")}
-              onClick={(event) => {
-                event.preventDefault();
-                void handleConfirmDemo();
-              }}
-            >
-              <CreditCard className="size-4" />
-              Pay ₹{(demoPayment?.amount ?? 10).toLocaleString("en-IN")} &amp; search
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </AppShell>
   );
 }

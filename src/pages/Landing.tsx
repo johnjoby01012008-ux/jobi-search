@@ -225,8 +225,8 @@ const STEPS = [
     icon: Users,
   },
   {
-    title: "See a quick ad",
-    body: "A short sponsored ad appears before the results — that keeps the search free, with no subscription and no booking fee.",
+    title: "See a sponsored ad",
+    body: "A clearly labelled sponsored ad appears while Jobi researches and again between the results — that keeps the search free, with no subscription and no booking fee.",
     icon: BadgeCheck,
   },
   {
@@ -495,7 +495,7 @@ export default function Landing() {
           <Reveal>
             <p className="eyebrow">Jobi acts like an advisor</p>
             <h2 className="mt-3 font-editorial text-3xl sm:text-4xl">
-              It asks the right questions before it shows you a quick ad and your results.
+              It asks the right questions before it shows you a sponsored ad and your results.
             </h2>
             <p className="mt-5 max-w-lg leading-7 text-muted-foreground">
               Vague requests get vague prices. Jobi reads your request, then shows exactly what it

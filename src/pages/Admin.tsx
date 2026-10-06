@@ -402,7 +402,7 @@ export default function Admin() {
               <Stat
                 label="Research revenue"
                 value={formatMoney(stats.revenue, stats.currency)}
-                sub="₹10 per paid search"
+                sub="No research fee — supported by ads"
               />
               <Stat
                 label="Avg search duration"

@@ -171,7 +171,7 @@ export function TripSearchBox({
       </div>
       <p className="mt-2 px-1 text-xs text-muted-foreground">
         Add your dates for sharper results — or leave them blank and Jobi will read them from your
-        message. Understanding your request is free; you only pay ₹10 when you unlock the deep search.
+        message. Understanding your request and the deep search are both free — Jobi is supported by a small sponsored ad, never a fee.
       </p>
     </div>
   );

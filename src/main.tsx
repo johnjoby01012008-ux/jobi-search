@@ -9,18 +9,46 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter, Route, Routes, useLocation } from "react-router";
 import "./index.css";
 
-// Lazy load route components for better code splitting
-const Landing = lazy(() => import("./pages/Landing.tsx"));
-const AuthPage = lazy(() => import("./pages/Auth.tsx"));
-const Dashboard = lazy(() => import("./pages/Dashboard.tsx"));
-const SearchPage = lazy(() => import("./pages/Search.tsx"));
-const SearchDetail = lazy(() => import("./pages/SearchDetail.tsx"));
-const Hotels = lazy(() => import("./pages/Hotels.tsx"));
-const HotelDetail = lazy(() => import("./pages/HotelDetail.tsx"));
-const Checkout = lazy(() => import("./pages/Checkout.tsx"));
-const BookingDetail = lazy(() => import("./pages/BookingDetail.tsx"));
-const Admin = lazy(() => import("./pages/Admin.tsx"));
-const NotFound = lazy(() => import("./pages/NotFound.tsx"));
+// Lazy load route components for better code splitting.
+//
+// A dynamically imported module can fail to *fetch* transiently when the Vite
+// dev server is re-optimizing dependencies or briefly invalidating its module
+// graph (the browser surfaces it as "Failed to fetch dynamically imported
+// module"). That is not a broken file, so reload the page once to refetch the
+// module instead of crashing the preview. A genuinely broken module still
+// throws on the second attempt.
+const CHUNK_RELOAD_KEY = "jobi:chunk-reload-attempted";
+function lazyWithRetry<T extends React.ComponentType<any>>(
+  factory: () => Promise<{ default: T }>,
+) {
+  return lazy(() =>
+    factory()
+      .then((module) => {
+        // Loaded fine — allow a future transient failure to retry again.
+        sessionStorage.removeItem(CHUNK_RELOAD_KEY);
+        return module;
+      })
+      .catch((error) => {
+        if (!sessionStorage.getItem(CHUNK_RELOAD_KEY)) {
+          sessionStorage.setItem(CHUNK_RELOAD_KEY, "1");
+          window.location.reload();
+        }
+        throw error;
+      }),
+  );
+}
+
+const Landing = lazyWithRetry(() => import("./pages/Landing.tsx"));
+const AuthPage = lazyWithRetry(() => import("./pages/Auth.tsx"));
+const Dashboard = lazyWithRetry(() => import("./pages/Dashboard.tsx"));
+const SearchPage = lazyWithRetry(() => import("./pages/Search.tsx"));
+const SearchDetail = lazyWithRetry(() => import("./pages/SearchDetail.tsx"));
+const Hotels = lazyWithRetry(() => import("./pages/Hotels.tsx"));
+const HotelDetail = lazyWithRetry(() => import("./pages/HotelDetail.tsx"));
+const Checkout = lazyWithRetry(() => import("./pages/Checkout.tsx"));
+const BookingDetail = lazyWithRetry(() => import("./pages/BookingDetail.tsx"));
+const Admin = lazyWithRetry(() => import("./pages/Admin.tsx"));
+const NotFound = lazyWithRetry(() => import("./pages/NotFound.tsx"));
 
 // Simple loading fallback for route transitions
 function RouteLoading() {

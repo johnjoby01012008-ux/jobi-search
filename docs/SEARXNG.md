@@ -27,6 +27,10 @@ the container is not published to the public internet.
 | `docker-compose.yml` | The `searxng` service, internal network and healthcheck. |
 | `searxng/settings.yml` | SearXNG config — JSON output enabled, public limiter off. |
 | `searxng/limiter.toml` | Bot-detection config (limiter disabled; kept explicit). |
+| `Dockerfile` | Repo-root SearXNG image for Git-based container hosts (root build context). |
+| `searxng/Dockerfile` | The same image for hosts whose build context is `searxng/` (Fly.io). |
+| `northflank.json` | Always-on deploy template for Northflank's free Sandbox plan. |
+| `searxng/fly.toml` | Fly.io app config (one warm machine, no scale-to-zero). |
 | `env.example` | Copy to `.env`; documents `SEARXNG_URL`, `SEARCH_*`, `PAYMENT_MODE`. |
 | `src/convex/jobi/search/searxng.ts` | The only module that talks to SearXNG (`searchWeb`). |
 | `src/convex/jobi/search/price.ts` | Price/rating extraction from untrusted text. |
@@ -204,11 +208,65 @@ Never logged: payment secrets, auth tokens, private user data, or the SearXNG UR
 
 ---
 
-## 9. Production / VPS deployment
+## 9. Deploying SearXNG to a public host
+
+The Convex Cloud backend runs outside this repo, so it needs a **stable, public
+HTTPS** address for SearXNG. Any host that can build a Dockerfile from this
+repository works: the tuned `searxng/settings.yml` (JSON output enabled, public
+limiter off) is baked into the image by `Dockerfile` / `searxng/Dockerfile`, so
+`/search?format=json` works without extra configuration.
 
 ```
-Internet ──► HTTPS ──► Jobi backend ──► searxng (private Docker network) ──► engines
+Internet ──► HTTPS ──► Jobi backend (Convex) ──► SearXNG ──► engines
 ```
+
+Whichever host you pick, finish with:
+
+```bash
+bunx convex env set SEARXNG_URL https://<your-instance-host>
+bunx convex run searchWeb:searxngHealth   # -> {"ok":true,"configured":true,...}
+```
+
+### Option A — Northflank (recommended: free, always-on, no sleeping)
+
+Northflank's free **Developer Sandbox** plan is explicitly *"Always-on compute —
+no sleeping"* (2 free services). That matters here: a scale-to-zero host adds a
+30–60s cold start that blows past the backend's 10s `SEARCH_TIMEOUT` and shows
+up as "search unavailable". Northflank does require a payment method on file to
+create resources, even on the free plan — the sandbox itself is not charged.
+
+**Template import (fastest):** in Northflank go to **Templates → Create →
+Import**, paste [`northflank.json`](../northflank.json), then **Run**. It creates
+the project and a combined service that builds the root `Dockerfile` from
+`github.com/johnjoby01012008-ux/jobi-search` (branch `main`) and exposes port
+`8080` over public HTTPS.
+
+**Manual equivalent:**
+
+1. **Create project** → region *Asia South Delhi* (`asia-south-delhi`).
+2. **Create → Combined service** → link the GitHub repo, branch `main`.
+3. Build type **Dockerfile**, Dockerfile path `/Dockerfile` (repo root).
+4. Add port **8080**, protocol **HTTP**, mark it **public**.
+5. Plan **nf-compute-20** (0.2 vCPU / 512 MB) — SearXNG needs ~512 MB.
+6. **Create service**, then copy the generated `https://…` domain.
+
+The service is continuous: one instance stays running, so there is no cold
+start between user searches.
+
+### Option B — Fly.io
+
+`searxng/fly.toml` is ready to go (one warm machine,
+`auto_stop_machines = false`, `min_machines_running = 1`):
+
+```bash
+cd searxng
+fly apps create jobi-searxng          # the name must be globally unique
+fly secrets set SEARXNG_SECRET="$(openssl rand -hex 32)"
+fly deploy
+curl https://jobi-searxng.fly.dev/healthz
+```
+
+### Option C — Your own VPS (docker-compose)
 
 1. On the VPS, remove the `ports:` block from the `searxng` service in
    `docker-compose.yml` so nothing publishes it publicly.

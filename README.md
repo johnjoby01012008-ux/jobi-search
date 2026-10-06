@@ -326,6 +326,20 @@ shared `searchCache` Convex table so de-duplication holds across all workers and
 deployments (`SEARCH_CACHE_TTL` seconds). Empty and failed results are never
 cached. Purge with `bunx convex run searchCache:clear`.
 
+## Deploying the live instance
+
+Live search needs a public SearXNG the Convex backend can reach over HTTPS.
+[`northflank.json`](northflank.json) deploys an always-on instance on
+Northflank's free Sandbox plan ("always-on compute — no sleeping", so no cold
+start against the 10s `SEARCH_TIMEOUT`); `searxng/fly.toml` does the same on
+Fly.io, and `docker-compose.yml` runs it on your own VPS. Full instructions in
+[`docs/SEARXNG.md` §9](docs/SEARXNG.md). Then:
+
+```bash
+bunx convex env set SEARXNG_URL https://<your-instance-host>
+bunx convex run searchWeb:searxngHealth
+```
+
 ## Environment variables
 
 | Variable | Default | Purpose |

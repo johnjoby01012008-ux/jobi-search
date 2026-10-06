@@ -1,0 +1,98 @@
+{
+  "apiVersion": "v1.2",
+  "name": "jobi-searxng",
+  "description": "Always-on, self-hosted SearXNG for Jobi Search. Builds the repo-root Dockerfile from GitHub, exposes port 8080 over public HTTPS, and runs one instance continuously (no sleeping / no scale-to-zero).",
+  "arguments": {},
+  "argumentOverrides": {},
+  "options": {
+    "autorun": true,
+    "concurrencyPolicy": "queue"
+  },
+  "spec": {
+    "kind": "Workflow",
+    "spec": {
+      "type": "sequential",
+      "steps": [
+        {
+          "kind": "Project",
+          "ref": "project",
+          "spec": {
+            "name": "jobi-search",
+            "region": "asia-south-delhi",
+            "networking": {
+              "allowedIngressProjects": []
+            }
+          }
+        },
+        {
+          "kind": "Workflow",
+          "spec": {
+            "type": "sequential",
+            "context": {
+              "projectId": "${refs.project.id}"
+            },
+            "steps": [
+              {
+                "kind": "CombinedService",
+                "ref": "searxng",
+                "spec": {
+                  "name": "searxng",
+                  "deployment": {
+                    "instances": 1,
+                    "storage": {
+                      "ephemeralStorage": {
+                        "storageSize": 1024
+                      },
+                      "shmSize": 64
+                    },
+                    "docker": {
+                      "configType": "default"
+                    }
+                  },
+                  "runtimeEnvironment": {},
+                  "runtimeFiles": {},
+                  "buildArguments": {},
+                  "buildFiles": {},
+                  "billing": {
+                    "deploymentPlan": "nf-compute-20",
+                    "buildPlan": "nf-compute-100-2"
+                  },
+                  "vcsData": {
+                    "projectType": "github",
+                    "projectUrl": "https://github.com/johnjoby01012008-ux/jobi-search",
+                    "projectBranch": "main"
+                  },
+                  "ports": [
+                    {
+                      "internalPort": 8080,
+                      "protocol": "HTTP",
+                      "name": "p8080",
+                      "public": true,
+                      "domains": [],
+                      "security": {
+                        "policies": [],
+                        "credentials": []
+                      },
+                      "disableNfDomain": false
+                    }
+                  ],
+                  "buildSettings": {
+                    "dockerfile": {
+                      "buildEngine": "buildkit",
+                      "dockerWorkDir": "/",
+                      "dockerFilePath": "/Dockerfile",
+                      "buildkit": {
+                        "useCache": false,
+                        "cacheStorageSize": 16384
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

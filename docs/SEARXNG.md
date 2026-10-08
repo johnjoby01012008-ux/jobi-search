@@ -1,8 +1,10 @@
 # Self-hosted SearXNG search layer
 
 Jobi Search uses a **self-hosted [SearXNG](https://docs.searxng.org/) instance**
-as its only live search layer. There is **no Brave / Tavily / Serper / Google
-API key** and **no paid search API** involved.
+as its primary live search layer. There is **no Brave / Tavily / Serper key**
+and **no paid search API** required. Setting `GEMINI_API_KEY` is optional: it
+adds Google Search grounding as a second source merged with the SearXNG
+results, and the pipeline runs exactly as before when it is absent.
 
 ```
 Frontend (Vite/React)
@@ -32,7 +34,9 @@ the container is not published to the public internet.
 | `northflank.json` | Always-on deploy template for Northflank's free Sandbox plan. |
 | `searxng/fly.toml` | Fly.io app config (one warm machine, no scale-to-zero). |
 | `env.example` | Copy to `.env`; documents `SEARXNG_URL` and `SEARCH_*`. |
-| `src/convex/jobi/search/searxng.ts` | The only module that talks to SearXNG (`searchWeb`). |
+| `src/convex/jobi/search/searxng.ts` | The SearXNG transport (`searchWeb`). |
+| `src/convex/jobi/search/gemini.ts` | Optional Gemini Google-Search grounding client. |
+| `src/convex/jobi/providers/compositeProvider.ts` | Merges every configured live source, de-duplicated. |
 | `src/convex/jobi/search/price.ts` | Price/rating extraction from untrusted text. |
 | `src/convex/jobi/providers/searxngProvider.ts` | Turns search results into offers. |
 | `src/convex/jobi/providers/cachedProvider.ts` | Cross-worker cache decorator around the live provider. |

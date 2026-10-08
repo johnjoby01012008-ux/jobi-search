@@ -295,8 +295,9 @@ When using convex, make sure:
 # Self-hosted search layer (SearXNG)
 
 Jobi Search runs its own [SearXNG](https://docs.searxng.org/) instance as the
-only live search layer — **no paid search API and no Brave/Tavily/Serper/Google
-key**. The full guide (setup, operations, pipeline, security and VPS
+primary live search layer — **no paid search API and no Brave/Tavily/Serper
+key required**. Optionally, setting `GEMINI_API_KEY` merges Google Search
+grounding into the same pipeline. The full guide (setup, operations, pipeline, security and VPS
 deployment) lives in [`docs/SEARXNG.md`](docs/SEARXNG.md); the essentials:
 
 ```bash
@@ -345,6 +346,8 @@ bunx convex run searchWeb:searxngHealth
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `SEARXNG_URL` | — | Internal SearXNG base URL (required for live search). |
+| `GEMINI_API_KEY` | — | Optional: adds Google Search grounding as a second merged source. |
+| `GEMINI_MODEL` | `gemini-2.5-flash` | Model used for grounding when `GEMINI_API_KEY` is set. |
 | `SEARCH_CACHE_TTL` | `900` | Seconds an identical query is cached. |
 | `SEARCH_TIMEOUT` | `10000` | Per-request timeout (ms). |
 | `SEARXNG_MAX_RESULTS` | `15` | Max results kept per query. |

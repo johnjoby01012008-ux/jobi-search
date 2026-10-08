@@ -6,6 +6,7 @@ import { parsedQueryValidator } from "./schema";
 import { CURRENCY, initialStages, RATE_LIMITS } from "./jobi/config";
 import { isValidParsedQuery } from "./jobi/parse";
 import { canAccessRecord } from "./jobi/access";
+import { GEMINI_LABEL } from "./jobi/search/gemini";
 import { detectSearXNGConfig } from "./jobi/providers";
 
 async function requireUserId(ctx: Parameters<typeof getAuthUserId>[0]) {
@@ -15,22 +16,37 @@ async function requireUserId(ctx: Parameters<typeof getAuthUserId>[0]) {
 }
 
 /**
- * Report whether the live web-search layer (SearXNG) is actually configured.
+ * Report whether a live web-search source is actually configured.
  *
- * Without `SEARXNG_URL` the engine falls back to the mock provider, so the UI
- * can tell the user honestly whether a run searches real sources or demo data.
- * The SearXNG base URL itself is never returned to the client.
+ * Without `SEARXNG_URL` and without `GEMINI_API_KEY` the engine falls back to
+ * the mock provider, so the UI can tell the user honestly whether a run searches
+ * real sources or demo data. The SearXNG base URL itself is never returned to
+ * the client.
  */
 export const researchSource = query({
   args: {},
   handler: async () => {
     const forcedDemo =
       process.env.JOBI_FORCE_DEMO === "1" || process.env.JOBI_FORCE_DEMO === "true";
-    const config = forcedDemo ? null : detectSearXNGConfig(process.env);
-    if (!config) {
+    const searxng = forcedDemo ? null : detectSearXNGConfig(process.env);
+    const gemini =
+      forcedDemo || !process.env.GEMINI_API_KEY?.trim() ? null : GEMINI_LABEL;
+
+    if (!searxng && !gemini) {
       return { live: false, providerLabel: "Demo data", reason: "no_key" as const };
     }
-    return { live: true, providerLabel: "SearXNG", reason: "configured" as const };
+    if (searxng && gemini) {
+      return {
+        live: true,
+        providerLabel: `${searxng ? "SearXNG" : ""} + Google`,
+        reason: "configured" as const,
+      };
+    }
+    return {
+      live: true,
+      providerLabel: searxng ? "SearXNG" : GEMINI_LABEL,
+      reason: "configured" as const,
+    };
   },
 });
 

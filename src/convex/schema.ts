@@ -157,11 +157,9 @@ const schema = defineSchema(
       parsed: parsedQueryValidator,
       status: searchStatusValidator,
       stages: v.array(stageValidator),
-      amountPaid: v.number(),
       currency: v.string(),
       demoMode: v.boolean(),
       createdAt: v.number(),
-      paidAt: v.optional(v.number()),
       completedAt: v.optional(v.number()),
       metrics: v.optional(metricsValidator),
       /** Human-readable transparency report shown on the results page. */

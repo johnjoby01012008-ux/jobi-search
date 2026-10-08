@@ -1,14 +1,11 @@
 /** Central configuration for the Jobi research engine and pricing. */
 
-/** ₹10 flat one-time deep-search fee. */
-export const SEARCH_FEE_PAISE = 1000;
-export const SEARCH_FEE_RUPEES = 10;
 export const CURRENCY = "INR";
 
 export const RESEARCH_BUDGET = {
-  /** Maximum distinct search queries per paid request. */
+  /** Maximum distinct search queries per research run. */
   maxQueries: 20,
-  /** Maximum candidate pages fetched / considered per paid request. */
+  /** Maximum candidate pages fetched / considered per research run. */
   maxPages: 50,
   /** Maximum wall-clock duration of a single research run. */
   maxDurationMs: 120_000,

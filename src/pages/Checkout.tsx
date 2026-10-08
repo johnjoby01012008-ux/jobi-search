@@ -222,10 +222,6 @@ export default function Checkout() {
                     {formatMoney(nightsTotal)}
                   </span>
                 </div>
-                <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>Jobi Search fee</span>
-                  <span>None — no booking markup</span>
-                </div>
               </div>
 
               <Button

@@ -37,11 +37,10 @@ export const researchSource = query({
 });
 
 /**
- * Create a free search and start the deep research immediately.
+ * Create a free, ad-supported search and start the deep research immediately.
  *
- * The search is free — there is no ₹10 payment gate. Results include the
- * booking URLs, and the first click through the ad interstitial reveals them
- * to the user (see `SearchDetail`).
+ * There is no charge and no gate. Results include the booking URLs, and a
+ * clearly labelled sponsored card sits between them (see `SearchDetail`).
  */
 export const createSearch = mutation({
   args: {
@@ -80,9 +79,8 @@ export const createSearch = mutation({
       userId,
       query: trimmed,
       parsed,
-      status: "paid",
+      status: "researching",
       stages: initialStages(),
-      amountPaid: 0,
       currency: CURRENCY,
       demoMode: false,
       createdAt: now,
@@ -96,8 +94,7 @@ export const createSearch = mutation({
       createdAt: now,
     });
 
-    // Run the deep search immediately — the search is free, so there is no
-    // payment gate to wait on. The scheduler keeps the HTTP path fast.
+    // Run the deep search immediately. The scheduler keeps the HTTP path fast.
     await ctx.scheduler.runAfter(0, internal.research.runSearch, {
       searchId,
     });
@@ -136,12 +133,9 @@ export const listSearches = query({
 /**
  * Results for a search, cheapest verified first, then observed.
  *
- * The search is free. Ownership is still enforced server-side, but booking
- * URLs are now included in the result rows so the client can open them.
- *
- * The *reveal* of a booking link is still presented behind an ad interstitial
- * in the UI (see `SearchDetail`), so the monetisation step sits between the
- * user and the provider link rather than behind a payment.
+ * Ownership is enforced server-side. Booking URLs are included in the result
+ * rows, and the UI shows a labelled sponsored card between results — that is
+ * the whole monetisation model.
  */
 export const getResults = query({
   args: { searchId: v.id("searches") },
@@ -166,9 +160,9 @@ export const getResults = query({
 /**
  * Return the booking URL for one result.
  *
- * The search is free and the URL is already included in `getResults`, but the
- * UI still routes the first click through this mutation so every reveal is
- * audit-logged server-side (`booking_url_revealed`).
+ * The URL is already included in `getResults`; the UI routes the click through
+ * this mutation so every reveal is audit-logged server-side
+ * (`booking_url_revealed`).
  */
 export const revealBookingUrl = mutation({
   args: { resultId: v.id("searchResults") },

@@ -31,7 +31,7 @@ the container is not published to the public internet.
 | `searxng/Dockerfile` | The same image for hosts whose build context is `searxng/` (Fly.io). |
 | `northflank.json` | Always-on deploy template for Northflank's free Sandbox plan. |
 | `searxng/fly.toml` | Fly.io app config (one warm machine, no scale-to-zero). |
-| `env.example` | Copy to `.env`; documents `SEARXNG_URL`, `SEARCH_*`, `PAYMENT_MODE`. |
+| `env.example` | Copy to `.env`; documents `SEARXNG_URL` and `SEARCH_*`. |
 | `src/convex/jobi/search/searxng.ts` | The only module that talks to SearXNG (`searchWeb`). |
 | `src/convex/jobi/search/price.ts` | Price/rating extraction from untrusted text. |
 | `src/convex/jobi/providers/searxngProvider.ts` | Turns search results into offers. |
@@ -152,24 +152,21 @@ network error.
 
 ---
 
-## 6. The ₹10 booking-URL lock
+## 6. Booking links, and how the product is paid for
 
 ```
-search ─► results shown (no URL) ─► ₹10 verified ─► revealBookingUrl ─► URL
+search ─► results ─► labelled sponsored card ─► provider booking page
 ```
 
-- `searches.getResults` **strips `bookingUrl` before the rows leave the server**
-  (`redactSearchResults`) and sets `bookingUrlLocked: true`. This is not CSS
-  hiding — the URL is never sent to an unpaid client.
-- `searches.revealBookingUrl` re-loads the search and its payment, and returns
-  the URL only when `canRevealBookingUrl` passes: the search is owned by the
-  user, a payment exists for the same user, `status === "paid"`, and
-  `verifiedAt > 0`. Otherwise it throws
-  `Complete the ₹10 payment to reveal this booking link.`
-- Every reveal is written to `auditLogs` (`booking_url_revealed`).
-- In development `PAYMENT_MODE=mock` uses the built-in demo verifier (shown as
-  DEMO in the UI). Swapping in Razorpay later means implementing the same
-  `verifyPayment` contract; the lock logic does not change.
+- `searches.getResults` returns each offer **with** its `bookingUrl` to the
+  signed-in owner, so every offer is actionable as soon as its results are
+  ready.
+- `searches.revealBookingUrl` re-reads a single result for the signed-in owner
+  and writes an `auditLogs` row (`booking_url_revealed`), so every outbound
+  click is traceable server-side.
+- Jobi Search takes no payment from the traveller. The UI is funded entirely by
+  the clearly labelled sponsored cards shown while research runs and between
+  results.
 
 ---
 
@@ -204,7 +201,7 @@ Structured, secret-free logs:
 - `[searxng] {"event":"search_error","reason":"timeout|network|status|malformed_json|malformed_shape",…}`
 - `[research] provider=searxng queries=… sources=… offers=… verified=… unavailable=… durationMs=…`
 
-Never logged: payment secrets, auth tokens, private user data, or the SearXNG URL.
+Never logged: auth tokens, private user data, or the SearXNG URL.
 
 ---
 
@@ -301,15 +298,15 @@ No application rewrite is needed — only `SEARXNG_URL` changes.
 ## 11. Tests
 
 ```bash
-bun run test        # vitest — includes the SearXNG + booking-lock suites
+bun run test        # vitest — includes the SearXNG transport + provider suites
 bun run lint
 bunx convex dev --once && bunx tsc -b --noEmit
 ```
 
 The suites cover connection, `searchWeb()`, timeout, malformed responses, hotel
 normalization, price extraction, duplicate results, cross-worker caching,
-cheapest-result selection, unavailable booking sources, payment not completed /
-completed, and booking-URL protection.
+cheapest-result selection, unavailable booking sources, and booking-link
+handling.
 
 `src/convex/jobi/__tests__/infra.test.ts` additionally guards the Docker setup
 itself: JSON output enabled, no public port publish, healthcheck present, no

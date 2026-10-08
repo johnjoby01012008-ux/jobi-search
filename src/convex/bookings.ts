@@ -11,8 +11,8 @@ import { ROLES } from "./schema";
  * Reservations.
  *
  * Jobi Search records the reservation and hands the guest to the property's
- * provider to complete payment — we never take the stay payment ourselves. The
- * one-time ₹10 research fee remains the only charge Jobi makes.
+ * provider to complete the stay payment — we never take the stay payment
+ * ourselves, and Jobi charges the traveller nothing.
  */
 
 async function requireUserId(ctx: QueryCtx) {

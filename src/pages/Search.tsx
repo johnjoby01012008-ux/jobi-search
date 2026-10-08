@@ -424,7 +424,7 @@ export default function Search() {
               </div>
             ) : null}
 
-            {/* Free search card (no payment, no Razorpay) */}
+            {/* Ad-supported search card */}
             <div className="rounded-xl border border-border bg-card p-5 shadow-frame sm:p-6">
               <div className="flex items-start justify-between gap-6">
                 <div>
@@ -437,7 +437,7 @@ export default function Search() {
                 </div>
                 <div className="text-right">
                   <p className="font-editorial text-3xl">Free</p>
-                  <p className="eyebrow mt-1">no search fee</p>
+                  <p className="eyebrow mt-1">supported by ads</p>
                 </div>
               </div>
 

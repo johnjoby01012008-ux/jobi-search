@@ -26,11 +26,9 @@ export const stats = query({
     const bookings = await ctx.db.query("bookings").order("desc").take(500);
     const hotels = await ctx.db.query("hotels").take(500);
 
-    const paid = searches.filter((s) => s.paidAt !== undefined);
     const completed = searches.filter((s) => s.status === "completed");
     const failed = searches.filter((s) => s.status === "failed");
     const partial = searches.filter((s) => s.status === "partial");
-    const revenue = paid.reduce((sum, s) => sum + (s.amountPaid ?? 0), 0);
 
     const withMetrics = searches.filter((s) => s.metrics);
     const avg = (pick: (s: (typeof searches)[number]) => number) =>
@@ -55,11 +53,9 @@ export const stats = query({
       cancelledBookings,
       bookedValue,
       totalSearches: searches.length,
-      paidSearches: paid.length,
       completedSearches: completed.length,
       failedSearches: failed.length,
       partialSearches: partial.length,
-      revenue,
       currency: "INR",
       avgDurationMs: avg((s) => s.metrics?.durationMs ?? 0),
       avgSources: avg((s) => s.metrics?.sourcesRead ?? 0),
@@ -86,7 +82,6 @@ export const listSearches = query({
           user: owner?.email ?? owner?.name ?? "unknown",
           destination: s.parsed.destination,
           status: s.status,
-          amountPaid: s.amountPaid,
           currency: s.currency,
           cheapestVerified: s.metrics?.cheapestVerified,
           sourcesChecked: s.metrics?.sourcesRead ?? 0,

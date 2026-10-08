@@ -363,7 +363,7 @@ export default function Admin() {
           <p className="eyebrow">Administration</p>
           <h1 className="mt-3 font-editorial text-3xl sm:text-4xl">Manage Jobi Search</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Inventory, reservations, research quality and revenue in one place.
+            Inventory, reservations and research quality in one place.
           </p>
         </div>
         <Button className="gap-2 self-start" onClick={openCreate}>
@@ -398,12 +398,8 @@ export default function Admin() {
                 sub="Paid at the property"
               />
               <Stat label="Price searches" value={String(stats.totalSearches)} />
-              <Stat label="Paid searches" value={String(stats.paidSearches)} />
-              <Stat
-                label="Research revenue"
-                value={formatMoney(stats.revenue, stats.currency)}
-                sub="No research fee — supported by ads"
-              />
+              <Stat label="Completed" value={String(stats.completedSearches)} />
+              <Stat label="Supported by" value="Ads" sub="Ad revenue" />
               <Stat
                 label="Avg search duration"
                 value={`${(stats.avgDurationMs / 1000).toFixed(1)}s`}
@@ -564,7 +560,6 @@ export default function Admin() {
                 <tr className="border-b border-border text-left text-xs text-muted-foreground">
                   <th className="px-4 py-3 font-medium">User</th>
                   <th className="px-4 py-3 font-medium">Destination</th>
-                  <th className="px-4 py-3 font-medium">Amount</th>
                   <th className="px-4 py-3 font-medium">Status</th>
                   <th className="px-4 py-3 font-medium">Cheapest verified</th>
                   <th className="px-4 py-3 font-medium">Sources</th>
@@ -577,9 +572,6 @@ export default function Admin() {
                       {row.user}
                     </td>
                     <td className="px-4 py-3">{row.destination}</td>
-                    <td className="px-4 py-3 tabular-nums">
-                      {formatMoney(row.amountPaid, row.currency)}
-                    </td>
                     <td className="px-4 py-3">
                       <Badge variant="secondary" className="font-normal capitalize">
                         {row.status.replace("_", " ")}

@@ -114,12 +114,7 @@ describe("environment configuration", () => {
 
   it("documents every required variable in the template", () => {
     const template = read("env.example");
-    for (const key of [
-      "SEARXNG_URL",
-      "SEARCH_CACHE_TTL",
-      "SEARCH_TIMEOUT",
-      "PAYMENT_MODE",
-    ]) {
+    for (const key of ["SEARXNG_URL", "SEARCH_CACHE_TTL", "SEARCH_TIMEOUT"]) {
       expect(template).toContain(`${key}=`);
     }
   });

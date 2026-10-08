@@ -304,7 +304,7 @@ deployment) lives in [`docs/SEARXNG.md`](docs/SEARXNG.md); the essentials:
 docker compose up -d
 
 # 2. Point the backend at it. The platform protects .env.example, so copy the
-#    shipped template instead (it documents SEARXNG_URL, SEARCH_*, PAYMENT_MODE).
+#    shipped template instead (it documents SEARXNG_URL and SEARCH_*).
 cp env.example .env        # SEARXNG_URL=http://localhost:8888  (host dev)
 
 # 3. Check health / test the JSON API
@@ -350,7 +350,6 @@ bunx convex run searchWeb:searxngHealth
 | `SEARXNG_MAX_RESULTS` | `15` | Max results kept per query. |
 | `SEARXNG_LANGUAGE` / `SEARXNG_CATEGORIES` | `en` / `general` | Passed to SearXNG. |
 | `SEARXNG_SECRET_KEY` | dev placeholder | SearXNG instance secret (change for prod). |
-| `PAYMENT_MODE` | `mock` | `mock` demo verifier, or `razorpay` later. |
 | `JOBI_FORCE_DEMO` | — | `1` forces the mock provider. |
 
 `.env` is gitignored. Never commit real secrets.

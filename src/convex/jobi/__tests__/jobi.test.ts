@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canAccessRecord, paymentIdempotencyKey } from "../access";
+import { canAccessRecord } from "../access";
 import { matchHotels, normalizeHotelName, tokenSimilarity } from "../matching";
 import { formatDateRange, isValidParsedQuery, nightsBetween, parseTripQuery } from "../parse";
 import { buildComparison, hasTemptingUnverified, offerTotal } from "../pricing";
@@ -183,16 +183,11 @@ describe("queries — dynamic generation", () => {
   });
 });
 
-describe("access — ownership and idempotency", () => {
+describe("access — ownership", () => {
   it("prevents one user from accessing another user's record", () => {
     expect(canAccessRecord({ userId: "user-a" }, "user-a")).toBe(true);
     expect(canAccessRecord({ userId: "user-a" }, "user-b")).toBe(false);
     expect(canAccessRecord(null, "user-b")).toBe(false);
     expect(canAccessRecord({ userId: "user-a" }, null)).toBe(false);
-  });
-
-  it("derives a stable idempotency key per search", () => {
-    expect(paymentIdempotencyKey("abc")).toBe("search:abc");
-    expect(paymentIdempotencyKey("abc")).toBe(paymentIdempotencyKey("abc"));
   });
 });

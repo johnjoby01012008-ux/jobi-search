@@ -226,7 +226,7 @@ const STEPS = [
   },
   {
     title: "See a sponsored ad",
-    body: "A clearly labelled sponsored ad appears while Jobi researches and again between the results — that keeps the search free, with no subscription and no booking fee.",
+    body: "A clearly labelled sponsored ad appears while Jobi researches and again between the results — that is what keeps Jobi running.",
     icon: BadgeCheck,
   },
   {
@@ -387,9 +387,9 @@ export default function Landing() {
               className="mt-10 grid max-w-xl grid-cols-3 divide-x divide-border border-y border-border"
             >
               {[
-                { label: "Research fee", value: "Free" },
+                { label: "Supported by", value: "Ads" },
                 { label: "Rates verified", value: "Always" },
-                { label: "Booking markup", value: "₹0" },
+                { label: "Sources checked", value: "Multiple" },
               ].map((stat) => (
                 <div key={stat.label} className="px-2 py-4 text-center first:pl-0 last:pr-0">
                   <dt className="eyebrow">{stat.label}</dt>

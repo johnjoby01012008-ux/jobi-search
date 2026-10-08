@@ -18,11 +18,3 @@ export function canAccessRecord(
   if (!record || !userId) return false;
   return record.userId === userId;
 }
-
-/**
- * A search's payment intent is keyed by the search id, so a double click can
- * only ever resolve to the same single ₹10 payment.
- */
-export function paymentIdempotencyKey(searchId: string): string {
-  return `search:${searchId}`;
-}

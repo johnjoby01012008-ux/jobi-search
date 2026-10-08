@@ -332,9 +332,7 @@ export default function SearchDetail() {
 
   const rows = (results ?? []) as unknown as ResultRow[];
   const hasResults = rows.length > 0;
-  const awaitingPayment =
-    search.status === "created" || search.status === "payment_pending";
-  const inProgress = ["paid", "researching", "comparing"].includes(search.status);
+  const inProgress = ["researching", "comparing"].includes(search.status);
   const cheapest = hasResults ? rows.find((row) => row.isCheapestVerified) : undefined;
   const verifiedRows = hasResults
     ? rows.filter((r) => r.priceStatus === "verified" && r.totalPrice !== undefined)
@@ -362,21 +360,6 @@ export default function SearchDetail() {
 
         </div>
       </div>
-
-      {/* Search not yet run (legacy unpaid searches) */}
-      {awaitingPayment ? (
-        <div className="rounded-xl border border-border bg-card p-6 text-center sm:p-10">
-          <Star className="mx-auto size-6 text-muted-foreground" />
-          <h1 className="mt-4 font-editorial text-2xl">This search hasn&apos;t run yet</h1>
-          <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
-            This search was created before the free launch, so no research has run on it yet. Start a
-            new search to see results instantly.
-          </p>
-          <Button asChild className="mt-6">
-            <Link to="/search">Start a free search</Link>
-          </Button>
-        </div>
-      ) : null}
 
       {/* Research in progress */}
       {inProgress ? (
@@ -458,8 +441,8 @@ export default function SearchDetail() {
         </div>
       ) : null}
 
-      {/* Results — free, shown immediately; a labelled sponsored card sits between results */}
-      {!inProgress && !awaitingPayment && search.status !== "failed" ? (
+      {/* Results — shown immediately; a labelled sponsored card sits between results */}
+      {!inProgress && search.status !== "failed" ? (
         <motion.div
           key="results"
           initial={{ opacity: 0, y: 16 }}

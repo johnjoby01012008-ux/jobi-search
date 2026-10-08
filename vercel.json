@@ -3,6 +3,7 @@
   "buildCommand": "npm run build",
   "framework": "vite",
   "env": {
-    "CONVEX_DEPLOYMENT": "freebuff:6e0b9149-a9d0-4fda-bc2d-9bb9839df5e8"
+    "CONVEX_DEPLOYMENT": "freebuff:6e0b9149-a9d0-4fda-bc2d-9bb9839df5e8",
+    "VITE_CONVEX_URL": "https://fortunate-ram-879.convex.cloud"
   }
 }

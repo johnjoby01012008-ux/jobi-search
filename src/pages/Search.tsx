@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/AppShell";
+import { GoogleSearchBox } from "@/components/GoogleSearchBox";
 import { TripSearchBox, type SearchDetails } from "@/components/TripSearchBox";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,7 +13,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { api } from "@/convex/_generated/api";
-import type { Id } from "@/convex/_generated/dataModel";
 import {
   isValidISODate,
   isValidParsedQuery,
@@ -20,7 +20,6 @@ import {
   parseTripQuery,
 } from "@/convex/jobi/parse";
 import type { ParsedQuery } from "@/convex/jobi/types";
-import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useAction, useMutation } from "convex/react";
 
@@ -43,7 +42,6 @@ import {
   MapPin,
   Pencil,
   Search as SearchIcon,
-  Sparkles,
   Users,
   Wallet,
   X,
@@ -152,20 +150,6 @@ export default function Search() {
   return (
     <AppShell>
       <div className="mx-auto max-w-3xl">
-        {false ? (
-          <div className="mb-6 flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 text-sm">
-            <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600" />
-            <p className="text-muted-foreground">
-              <span className="font-medium text-foreground">
-                Live web search isn&apos;t connected yet.
-              </span>{" "}
-              Searches currently run on clearly-labelled demo data. To search real hotel sources,
-              start the self-hosted SearXNG service (`docker compose up -d`) and set{" "}
-              <span className="font-medium text-foreground">SEARXNG_URL</span> in the project keys.
-            </p>
-          </div>
-        ) : null}
-
         {!parsed ? (
           <div>
             <p className="eyebrow">New search</p>
@@ -487,6 +471,12 @@ export default function Search() {
             </button>
           </div>
         )}
+
+        {/* Google Programmable Search — an extra utility beside Jobi's own
+            hotel research and price comparison. */}
+        <div className="mt-10">
+          <GoogleSearchBox />
+        </div>
       </div>
     </AppShell>
   );

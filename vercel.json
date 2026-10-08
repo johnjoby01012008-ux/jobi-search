@@ -1,24 +1,8 @@
 {
   "installCommand": "npm install",
-  "buildCommand": "npx convex codegen && npm run build",
+  "buildCommand": "npm run build",
   "framework": "vite",
   "env": {
-    "CONVEX_DEPLOYMENT": "freebuff:6e0b9149-a9d0-4fda-bc2d-9bb9839df5e8",
-    "CONVEX_SITE_URL": "https://jobi-search.onrender.com"
-  },
-  "headers": [
-    {
-      "source": "/(.*)",
-      "headers": [
-        {
-          "key": "Cross-Origin-Opener-Policy",
-          "value": "same-origin"
-        },
-        {
-          "key": "Cross-Origin-Embedder-Policy",
-          "value": "require-corp"
-        }
-      ]
-    }
-  ]
+    "CONVEX_DEPLOYMENT": "freebuff:6e0b9149-a9d0-4fda-bc2d-9bb9839df5e8"
+  }
 }

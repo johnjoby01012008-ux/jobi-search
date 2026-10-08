@@ -115,7 +115,14 @@ class RootErrorBoundary extends React.Component<
   }
 }
 
-const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
+// The deployment URL is injected as VITE_CONVEX_URL by the runtime that serves
+// this app. A hosted build (Vercel) does not set it, so fall back to the
+// project's own deployment rather than constructing the client with
+// `undefined` and leaving the whole app unable to reach the backend. The URL is
+// public — it is inlined into the client bundle either way.
+const convexUrl =
+  import.meta.env.VITE_CONVEX_URL ?? "https://fortunate-ram-879.convex.cloud";
+const convex = new ConvexReactClient(convexUrl);
 
 
 

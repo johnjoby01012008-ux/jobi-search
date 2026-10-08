@@ -8,7 +8,8 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "npx convex codegen && tsc -b && vite build",
+    "build": "tsc -b && vite build",
+    "convex:codegen": "convex codegen",
     "lint": "eslint .",
     "typecheck": "tsc -b --noEmit",
     "test": "vitest run",

@@ -63,7 +63,7 @@ describe("normalizeGroundingChunks", () => {
       source: "booking.com",
       price: 5400,
       currency: "INR",
-      rating: null,
+      rating: undefined,
     });
     expect(first.snippet).toContain("5,400");
   });
@@ -124,7 +124,9 @@ describe("GeminiSearchClient", () => {
 });
 
 describe("GeminiProvider", () => {
+  const parsed: import("../types").ParsedQuery = { destination: "Goa", checkIn: "2026-12-12", checkOut: "2026-12-15", guests: 2, rooms: 1, budgetType: "total", preferences: [] };
   it("produces observed raw results for the pipeline", async () => {
+    const parsed: import("../types").ParsedQuery = { destination: "Goa", checkIn: "2026-12-12", checkOut: "2026-12-15", guests: 2, rooms: 1, budgetType: "total", preferences: [] };
     const provider = new GeminiProvider(
       new GeminiSearchClient({ apiKey: KEY, model: "gemini-2.5-flash" }, {
         fetchImpl: async () =>
@@ -134,9 +136,11 @@ describe("GeminiProvider", () => {
             snippet: "Great deal from ₹2,499 per night",
           }),
       }),
+      parsed,
     );
 
-    const [row] = await provider.search("goa hotels");
+    const ctx: import("../types").ResearchContext = { queries: [], parsed, budget: { maxQueries: 1, maxPages: 1, maxDurationMs: 1000 }, startedAt: Date.now() };
+    const [row] = await provider.search("goa hotels", ctx);
 
     expect(row.priceStatus).toBe("observed");
     expect(row.providerName).toBe("Agoda");

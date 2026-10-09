@@ -34,8 +34,8 @@ export function toRawSearchResult(
     url: result.url,
     snippet: sanitizeUntrustedText(result.snippet, 600),
     source: result.source,
-    observedPrice: hasPrice ? result.price : undefined,
-    observedCurrency: hasPrice ? result.currency ?? "INR" : undefined,
+    observedPrice: hasPrice ? (result.price ?? undefined) : undefined,
+    observedCurrency: hasPrice ? (result.currency ?? "INR") : undefined,
     providerName,
     hotelName: result.hotelName,
     rating: result.rating,
@@ -45,10 +45,6 @@ export function toRawSearchResult(
       ? "Price observed in a search snippet - not verified for your exact dates."
       : "No price found in the snippet - check the provider page for availability.",
     destination: parsed.destination,
-    checkIn: parsed.checkIn,
-    checkOut: parsed.checkOut,
-    guests: parsed.guests,
-    rooms: parsed.rooms,
   };
 }
 

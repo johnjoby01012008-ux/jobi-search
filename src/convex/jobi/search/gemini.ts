@@ -158,6 +158,7 @@ export function normalizeGroundingChunks(
       location: undefined,
       rating: undefined,
     });
+    break;
 
     if (results.length >= MAX_RESULTS) break;
   }

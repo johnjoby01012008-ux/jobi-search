@@ -87,8 +87,8 @@ describe("SearXNGProvider", () => {
       price: null,
       currency: null,
       hotelName: "Taj",
-      location: null,
-      rating: null,
+      location: undefined,
+      rating: undefined,
     }, parsed);
     expect(raw.observedPrice).toBeUndefined();
     expect(raw.priceStatus).toBe("observed");

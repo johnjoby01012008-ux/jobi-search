@@ -183,7 +183,13 @@ export const runSearch = internalAction({
     const search = await ctx.runQuery(internal.research.getSearchInternal, { searchId });
     if (!search) return;
 
-    const { provider, demoMode } = createResearchProvider(process.env);
+    const searchDoc = await ctx.runQuery(internal.research.getSearchInternal, { searchId });
+    if (!searchDoc) return;
+
+    const { providers, demoMode } = createResearchProvider(process.env, searchDoc.parsed);
+    // `runResearch` owns the provider interface; it only ever uses a single provider's
+    // `.search`, so a single live provider is enough even when more are configured.
+    const provider = providers[0];
 
     // Wrap the live provider in the shared, cross-worker cache so identical
     // queries are only sent to SearXNG once per TTL window. The mock provider

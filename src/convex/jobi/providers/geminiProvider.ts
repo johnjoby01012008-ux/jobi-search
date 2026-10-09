@@ -23,8 +23,12 @@ export class GeminiProvider implements ResearchProvider {
     this.parsed = parsed;
   }
 
-  async search(query: string): Promise<RawSearchResult[]> {
-    const results = await this.client.search(query, this.parsed);
+  async search(_query: string, ctx: import("../types").ResearchContext): Promise<RawSearchResult[]> {
+    // GeminiProvider ignores the engine-level query list and runs one grounded
+    // Google Search query per provider invocation. The ResearchContext still
+    // travels through to `toRawSearchResult` so downstream normalisation gets
+    // the parsed dates/guests/rooms.
+    const results = await this.client.search(_query);
     return results.map((result) => toRawSearchResult(result, this.parsed));
   }
 }

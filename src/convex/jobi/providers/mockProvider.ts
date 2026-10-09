@@ -247,7 +247,6 @@ function buildCatalog(parsed: ParsedQuery): RawSearchResult[] {
 
   // Official providers get branded, dated booking URLs so the registry can
   // demonstrate the official-site provider id without making a live call.
-  const officialIndex = results.length;
   const officialName = NAME_PREFIXES[Math.floor(random() * NAME_PREFIXES.length)] + " " + parsed.destination + " " + NAME_TYPES[Math.floor(random() * NAME_TYPES.length)];
   results.push({
     title: officialName + " - Official hotel website",
@@ -270,7 +269,7 @@ function buildCatalog(parsed: ParsedQuery): RawSearchResult[] {
     priceStatus: "verified",
     confidence: "high",
     rating: Math.round((4.2 + random() * 0.6) * 10) / 10,
-    imageUrl: IMAGES[(i + 5) % IMAGES.length],
+    imageUrl: IMAGES[(hotelCount - 1 + 5) % IMAGES.length],
     amenities: Array.from(new Set([...BASE_AMENITIES, "freeCancellation", "breakfastIncluded"])),
     notes: undefined,
   });

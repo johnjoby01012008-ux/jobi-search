@@ -42,6 +42,7 @@ export function recordProviderAttempt(
     priceVerified,
     failureReason,
     pageCount,
+    queryCount: 0,
   });
 }
 

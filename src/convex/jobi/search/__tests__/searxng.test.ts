@@ -109,8 +109,8 @@ describe("normalization", () => {
       currency: "INR",
       rating: 4.2,
     });
-    expect(normalized!.hotelName).toBe("Taj Holiday Village Resort & Spa");
-    expect(normalized!.location).toBe("Goa");
+    expect(normalized![0].hotelName).toBe("Taj Holiday Village Resort & Spa");
+    expect(normalized![0].location).toBe("Goa");
   });
 
   it("drops items without a title or a parseable URL", () => {

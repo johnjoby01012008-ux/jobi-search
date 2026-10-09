@@ -238,7 +238,7 @@ export function createResearchProvider(
   }
 
   if (geminiConfig) {
-    providers.push(new GeminiProvider(new GeminiSearchClient(geminiConfig)));
+    providers.push(new GeminiProvider(new GeminiSearchClient(geminiConfig), parsed));
   }
 
   if (providers.length === 0) {

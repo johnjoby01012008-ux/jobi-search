@@ -30,6 +30,8 @@ export class SearXNGClient {
     this.config = config;
   }
 
+
+
   async search(query: string): Promise<SearXNGResult[]> {
     const fetchImpl = this.config.fetchImpl ?? globalThis.fetch.bind(globalThis);
     const startedAt = Date.now();
@@ -159,12 +161,13 @@ export function searchWeb(
   options: { client?: SearXNGClient; env?: Record<string, string | undefined> } = {},
 ): Promise<SearXNGResult[]> {
   const { client, env } = options;
+  const resolved = resolveSearXNGConfig(env);
   const config = client ?? new SearXNGClient({
-    baseUrl: resolveSearXNGConfig(env)?.baseUrl ?? "",
-    timeoutMs: resolveSearXNGConfig(env)?.timeoutMs ?? 10_000,
-    fetchImpl: resolveSearXNGConfig(env)?.fetchImpl,
-    logger: resolveSearXNGConfig(env)?.logger,
+    baseUrl: resolved?.baseUrl ?? "",
+    timeoutMs: resolved?.timeoutMs ?? 10_000,
+    fetchImpl: resolved?.fetchImpl,
+    logger: resolved?.logger,
   });
-  if (!config.baseUrl) throw new SearchUnavailableError("SearXNG is not configured");
+  if (!resolved?.baseUrl) throw new SearchUnavailableError("SearXNG is not configured");
   return config.search(query);
 }

@@ -12,8 +12,8 @@ function makeClient(results: Partial<SearXNGResult>[]): SearXNGClient {
           url: result.url ?? "https://www.booking.com/x",
           source: result.source ?? "www.booking.com",
           snippet: result.snippet ?? "",
-          price: result.price ?? null,
-          currency: result.currency ?? null,
+          price: result.price ?? undefined,
+          currency: result.currency ?? undefined,
           hotelName: result.hotelName ?? null,
           location: result.location ?? null,
           rating: result.rating ?? null,
@@ -25,8 +25,9 @@ function makeClient(results: Partial<SearXNGResult>[]): SearXNGClient {
 }
 
 describe("SearXNGProvider", () => {
+  const parsed: import("../../types").ParsedQuery = { destination: "Goa", checkIn: "2026-12-12", checkOut: "2026-12-15", guests: 2, rooms: 1, budgetType: "total", preferences: [] };
   it("is a live provider", () => {
-    const provider = new SearXNGProvider(makeClient([]));
+    const provider = new SearXNGProvider(makeClient([]), parsed);
     expect(provider.name).toBe("searxng");
     expect(provider.live).toBe(true);
   });
@@ -52,7 +53,7 @@ describe("SearXNGProvider", () => {
       },
     ]);
 
-    const results = await new SearXNGProvider(client).search("goa hotels");
+    const results = await new SearXNGProvider(client, parsed).search("goa hotels");
     expect(results[0].providerName).toBe("Agoda");
     expect(results[1].providerName).toBe("Booking.com");
     expect(results[2].providerName).toBeUndefined();
@@ -69,7 +70,7 @@ describe("SearXNGProvider", () => {
       hotelName: "Sea Breeze Inn",
       location: "Goa",
       rating: 4,
-    });
+    }, parsed);
 
     expect(raw.priceStatus).toBe("observed");
     expect(raw.confidence).toBe("low");
@@ -88,7 +89,7 @@ describe("SearXNGProvider", () => {
       hotelName: "Taj",
       location: null,
       rating: null,
-    });
+    }, parsed);
     expect(raw.observedPrice).toBeUndefined();
     expect(raw.priceStatus).toBe("observed");
     expect(raw.notes).toMatch(/no price/i);

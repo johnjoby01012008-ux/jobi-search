@@ -11,6 +11,11 @@ export interface PriceAmount {
   currency: string;
 }
 
+export interface PriceAmount {
+  amount: number;
+  currency: string;
+}
+
 export interface PriceContext {
   raw: string;
   price_type: "total" | "starting_from" | "per_night" | "nightly" | "unknown";
@@ -90,4 +95,36 @@ export interface ExtractionBackendConfig {
   timeoutMs: number;
   maxUrlsPerBatch: number;
   enabled: boolean;
+}
+
+/**
+ * SSRF-safe URL validator result, mirroring backend/extractor/validators.py.
+ * Used by the backend-side URLSafety layer before any page is sent to the
+ * extraction service.
+ */
+export interface SafeUrlCheck {
+  /** True when the URL is safe to fetch (public https/http, not private/metadata). */
+  ok: boolean;
+  /** The original URL string, normalized where possible. */
+  url: string;
+  /** Reason when the URL was rejected (blocked_url, blocked_ip, dns_failed, etc.). */
+  reason: string | null;
+  /** The final public hostname, if the URL is safe. */
+  hostname: string | null;
+}
+
+/**
+ * License / policy metadata extracted from a provider page alongside the price.
+ * Kept separate from the offer so the UI can display it without altering pricing
+ * comparison logic.
+ */
+export interface PagePolicy {
+  /** Human-readable cancellation text, if any was detected. */
+  cancellationText: string | null;
+  /** True when free cancellation was explicitly detected on the page. */
+  freeCancellation: boolean | null;
+  /** Availability signal detected on the page. */
+  availability: "available" | "limited" | "unavailable" | "unknown" | null;
+  /** Meal plan / breakfast signal detected on the page. */
+  mealPlan: string | null;
 }

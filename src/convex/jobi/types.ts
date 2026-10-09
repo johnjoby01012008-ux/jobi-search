@@ -1,9 +1,3 @@
-/**
- * Jobi domain types shared by the Convex backend, the research providers and
- * the frontend. This module is intentionally free of any Convex / React
- * imports so it can be imported anywhere (and unit tested with vitest).
- */
-
 export type PriceStatus = "verified" | "observed" | "estimated" | "unknown";
 export type Confidence = "high" | "medium" | "low";
 export type BudgetType = "total" | "per_night";
@@ -154,4 +148,28 @@ export interface Comparison {
   averageVerified?: number;
   /** Saving vs. the average of the other verified offers. */
   savingsVsAverage?: number;
+}
+
+/**
+ * Per-provider diagnostic snapshot used by the transparency/reporting layer.
+ *
+ * This type was split out of `types.ts` but the import in `diagnostic.ts`
+ * still expects it to live in `types`. Keep the shape here in sync with the
+ * fields `diagnostic.ts` reads/writes.
+ */
+export interface ProviderDiagnostic {
+  id: string;
+  name: string;
+  hostname: string | null;
+  query: string;
+  searchOk: boolean;
+  searchable: boolean;
+  accessible: boolean;
+  extracted: boolean;
+  priceVerified: boolean;
+  failureReason: string | null;
+  pageCount: number;
+  queryCount: number;
+  /** When the attempt produced at least one usable offer, set by the reporter. */
+  ok?: boolean;
 }

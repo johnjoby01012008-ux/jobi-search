@@ -154,9 +154,9 @@ export function normalizeGroundingChunks(
       snippet,
       price: price?.amount ?? null,
       currency: price?.currency ?? null,
-      hotelName: null,
-      location: null,
-      rating: null,
+      hotelName: undefined,
+      location: undefined,
+      rating: undefined,
     });
 
     if (results.length >= MAX_RESULTS) break;

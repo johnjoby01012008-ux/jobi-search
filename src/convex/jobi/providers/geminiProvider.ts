@@ -16,13 +16,15 @@ export class GeminiProvider implements ResearchProvider {
   live = true;
 
   private readonly client: GeminiSearchClient;
+  private readonly parsed: import("../types").ParsedQuery;
 
-  constructor(client: GeminiSearchClient) {
+  constructor(client: GeminiSearchClient, parsed: import("../types").ParsedQuery) {
     this.client = client;
+    this.parsed = parsed;
   }
 
   async search(query: string): Promise<RawSearchResult[]> {
-    const results = await this.client.search(query);
-    return results.map((result) => toRawSearchResult(result));
+    const results = await this.client.search(query, this.parsed);
+    return results.map((result) => toRawSearchResult(result, this.parsed));
   }
 }

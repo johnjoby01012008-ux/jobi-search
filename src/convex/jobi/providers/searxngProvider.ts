@@ -1,16 +1,23 @@
-
 import type { RawSearchResult, ResearchProvider } from "../types";
 import type { SearXNGClient, SearXNGResult } from "../search/searxng";
-import { providerForHostname, sanitizeUntrustedText } from "../urlSafety";
+import {
+  PROVIDER_ALLOWLIST,
+  providerForHostname,
+  sanitizeUntrustedText,
+} from "../urlSafety";
 import type { ParsedQuery } from "../types";
 
 /**
  * SearXNGProvider — the primary live research source.
  *
  * It feeds the *same* raw shape as the Gemini grounding source, so every live
- * source flows through the existing normalise → dedupe → compare → verify
+ * source flows through the existing normalise > dedupe > compare > verify
  * pipeline. Text from the web stays untrusted DATA and is sanitised on the way
  * in; observed prices are never reported as verified.
+ *
+ * The provider id is derived from each result's host name so downstream code
+ * can tell which booking platform a row came from even when the original
+ * search string was generic.
  */
 export function toRawSearchResult(
   result: SearXNGResult,
@@ -27,16 +34,16 @@ export function toRawSearchResult(
     url: result.url,
     snippet: sanitizeUntrustedText(result.snippet, 600),
     source: result.source,
-    observedPrice: hasPrice ? result.price! : undefined,
+    observedPrice: hasPrice ? result.price : undefined,
     observedCurrency: hasPrice ? result.currency ?? "INR" : undefined,
     providerName,
-    hotelName: result.hotelName ?? undefined,
-    rating: result.rating ?? undefined,
+    hotelName: result.hotelName,
+    rating: result.rating,
     priceStatus: "observed",
     confidence: "low",
     notes: hasPrice
-      ? "Price observed in a search snippet — not verified for your exact dates."
-      : "No price found in the snippet — check the provider page for availability.",
+      ? "Price observed in a search snippet - not verified for your exact dates."
+      : "No price found in the snippet - check the provider page for availability.",
     destination: parsed.destination,
     checkIn: parsed.checkIn,
     checkOut: parsed.checkOut,

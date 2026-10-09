@@ -1,13 +1,11 @@
-
 /**
- * Pluggable research-provider registry.
+ * Provider registry for the Jobi hotel research engine.
  *
- * Every provider satisfies `ResearchProvider` from `../types`. The engine only
- * knows about the interface; it does not know which providers exist.
- *
- * `createResearchProvider(env, parsed)` is the single place that decides which
- * provider (or combination) is active right now. Add a new provider here and
- * the research engine picks it up automatically.
+ * Every one of the eight target platforms is represented here as its own small
+ * strategy: which SearXNG engines to scope, what the search string should look
+ * like, how discovered URLs are routed through the extractor, and how their
+ * prices are verified. The engine only talks to `ResearchProvider`
+ * implementations; it never reaches into this registry directly.
  */
 
 import type { ResearchProvider } from "../types";

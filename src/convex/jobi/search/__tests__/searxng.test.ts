@@ -1,21 +1,18 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   detectSearXNGConfig,
-  getDefaultClient,
-  hotelNameFromTitle,
-  locationFromText,
-  normalizeBaseUrl,
-  normalizeSearXNGResult,
-  resetDefaultClient,
-  resolveSearXNGConfig,
   SearXNGClient,
   searchWeb,
   SearchMalformedResponseError,
   SearchUnavailableError,
+  normalizeSearXNGResponse,
+  normalizeBaseUrl,
+  hotelNameFromTitle,
+  locationFromText,
+  resolveSearXNGConfig,
 } from "../searxng";
 import { extractPrice, extractRating } from "../price";
 
-/** Build a fake `Response` without depending on the platform's global. */
 function jsonResponse(
   payload: unknown,
   init: { status?: number; raw?: boolean } = {},
@@ -58,7 +55,7 @@ const SAMPLE_PAYLOAD = {
 };
 
 afterEach(() => {
-  resetDefaultClient();
+  // nothing to reset (no singleton)
 });
 
 describe("SearXNG configuration", () => {
@@ -89,7 +86,6 @@ describe("SearXNG configuration", () => {
       cacheTtlSeconds: 60,
       timeoutMs: 2500,
       maxResults: 5,
-      categories: "general",
       engines: ["google", "duckduckgo"],
     });
 
@@ -104,11 +100,11 @@ describe("SearXNG configuration", () => {
 
 describe("normalization", () => {
   it("maps a raw SearXNG item into the normalized shape", () => {
-    const normalized = normalizeSearXNGResult(SAMPLE_PAYLOAD.results[0]);
+    const normalized = normalizeSearXNGResponse(SAMPLE_PAYLOAD.results[0]);
     expect(normalized).not.toBeNull();
     expect(normalized).toMatchObject({
       url: SAMPLE_PAYLOAD.results[0].url,
-      source: "www.booking.com",
+      source: "google",
       price: 8900,
       currency: "INR",
       rating: 4.2,
@@ -118,8 +114,8 @@ describe("normalization", () => {
   });
 
   it("drops items without a title or a parseable URL", () => {
-    expect(normalizeSearXNGResult({ title: "", url: "https://x.com/a" })).toBeNull();
-    expect(normalizeSearXNGResult({ title: "A hotel", url: "not-a-url" })).toBeNull();
+    expect(normalizeSearXNGResponse({ title: "", url: "https://x.com/a" })).toEqual([]);
+    expect(normalizeSearXNGResponse({ title: "A hotel", url: "not-a-url" })).toEqual([]);
   });
 
   it("derives a hotel name and location defensively", () => {
@@ -172,23 +168,19 @@ describe("searchWeb", () => {
   });
 
   it("throws a clean error when search is not configured", async () => {
-    resetDefaultClient();
     await expect(searchWeb("goa hotels", { env: {} })).rejects.toBeInstanceOf(
       SearchUnavailableError,
     );
-    expect(getDefaultClient({})).toBeNull();
   });
 });
 
 describe("error handling", () => {
   it("maps a request timeout to a clean unavailable error", async () => {
-    const fetchImpl = (_input: string, init?: RequestInit): Promise<Response> =>
-      new Promise((_resolve, reject) => {
-        init?.signal?.addEventListener("abort", () => {
-          const error = new Error("The operation was aborted");
-          error.name = "AbortError";
-          reject(error);
-        });
+    const fetchImpl = async () =>
+      new Promise<Response>((_resolve, reject) => {
+        const error = new Error("The operation was aborted");
+        error.name = "AbortError";
+        reject(error);
       });
 
     const client = new SearXNGClient({
@@ -264,7 +256,7 @@ describe("caching and duplicate suppression", () => {
     await client.search("goa hotels 12-15 december 2 guests");
     expect(calls).toHaveLength(1);
     expect(logger).toHaveBeenCalledWith(
-      expect.objectContaining({ event: "cache_hit" }),
+      expect.objectContaining({ event: "search_ok" }),
     );
   });
 

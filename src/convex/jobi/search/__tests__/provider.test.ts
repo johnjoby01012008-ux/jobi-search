@@ -3,20 +3,25 @@ import { SearXNGProvider, toRawSearchResult } from "../../providers/searxngProvi
 import { SearXNGClient, type SearXNGResult } from "../searxng";
 
 function makeClient(results: Partial<SearXNGResult>[]): SearXNGClient {
-  return {
-    search: async () =>
-      results.map((result) => ({
-        title: result.title ?? "Hotel",
-        url: result.url ?? "https://www.booking.com/x",
-        source: result.source ?? "www.booking.com",
-        snippet: result.snippet ?? "",
-        price: result.price ?? null,
-        currency: result.currency ?? null,
-        hotelName: result.hotelName ?? null,
-        location: result.location ?? null,
-        rating: result.rating ?? null,
-      })),
-  } as unknown as SearXNGClient;
+  return new SearXNGClient({
+    baseUrl: "http://localhost:8080",
+    fetchImpl: async () =>
+      new Response(
+        JSON.stringify({ results: results.map((result) => ({
+          title: result.title ?? "Hotel",
+          url: result.url ?? "https://www.booking.com/x",
+          source: result.source ?? "www.booking.com",
+          snippet: result.snippet ?? "",
+          price: result.price ?? null,
+          currency: result.currency ?? null,
+          hotelName: result.hotelName ?? null,
+          location: result.location ?? null,
+          rating: result.rating ?? null,
+        })) }),
+        { status: 200 },
+      ),
+    logger: () => {},
+  });
 }
 
 describe("SearXNGProvider", () => {

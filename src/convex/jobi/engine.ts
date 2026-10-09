@@ -4,6 +4,7 @@ import { dedupeOffers, normalizeResults } from "./normalize";
 import { buildComparison } from "./pricing";
 import { generateQueries } from "./queries";
 import { validateBookingUrl } from "./urlSafety";
+import { runExtractionStage } from "./extraction/extractStage";
 import type {
   Comparison,
   HotelOffer,
@@ -101,6 +102,35 @@ export async function runResearch(params: {
       const message = error instanceof Error ? error.message : "unknown error";
       unavailable.push(`${query} (${message})`);
     }
+  }
+
+  // Extraction stage: fetch and extract hotel data from discovered pages.
+  // Only runs when BACKEND_EXTRACTOR_URL is configured. Extracted offers
+  // flow into the same normalize → dedupe → compare pipeline as search results.
+  await params.hooks?.onStage?.("extract");
+
+  const extraction = await runExtractionStage(
+    rawResults,
+    {
+      checkIn: params.parsed.checkIn,
+      checkOut: params.parsed.checkOut,
+      guests: params.parsed.guests,
+      rooms: params.parsed.rooms,
+    },
+  );
+
+  // Merge extracted offers into rawResults (dedupe by URL so we don't
+  // double-count a page that both search and extraction found).
+  const seenUrls = new Set(rawResults.map((r) => r.url));
+  for (const offer of extraction.extractedOffers) {
+    if (seenUrls.has(offer.url)) continue;
+    seenUrls.add(offer.url);
+    rawResults.push(offer);
+  }
+
+  // Log extraction failures as unavailable sources.
+  for (const failure of extraction.failedUrls) {
+    unavailable.push(`extract:${failure.url} (${failure.reason})`);
   }
 
   await params.hooks?.onStage?.("check");

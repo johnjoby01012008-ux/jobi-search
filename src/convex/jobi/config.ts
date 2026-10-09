@@ -46,6 +46,7 @@ export const RATE_LIMITS = {
 export const STAGE_LABELS = [
   { key: "understand", label: "Understanding your request" },
   { key: "discover", label: "Finding hotels" },
+  { key: "extract", label: "Extracting hotel pages" },
   { key: "check", label: "Checking booking sources" },
   { key: "compare", label: "Comparing prices" },
   { key: "verify", label: "Verifying cheapest offer" },

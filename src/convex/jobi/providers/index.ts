@@ -1,51 +1,70 @@
-import type { ResearchProvider } from "../types";
-import { resolveGeminiConfig, GeminiSearchClient } from "../search/gemini";
-import { resolveSearXNGConfig, SearXNGClient } from "../search/searxng";
-import { CompositeProvider } from "./compositeProvider";
-import { GeminiProvider } from "./geminiProvider";
-import { mockResearchProvider } from "./mockProvider";
-import { SearXNGProvider } from "./searxngProvider";
+/**
+ * Pluggable research-provider registry.
+ *
+ * Every provider satisfies `ResearchProvider` from `../types`. The engine only
+ * knows about the interface; it does not know which providers exist.
+ *
+ * `createResearchProvider(env)` is the single place that decides which provider
+ * (or combination) is active right now. Add a new provider here and the
+ * research engine picks it up automatically.
+ *
+ * Provider construction is done per-run so that per-request timeouts and
+ * search context are explicit.
+ */
 
-export { mockResearchProvider } from "./mockProvider";
-export { SearXNGProvider } from "./searxngProvider";
-export { detectSearXNGConfig } from "../search/searxng";
-export { extractObservedPrice, extractPrice } from "../search/price";
+import type { ResearchProvider } from "../types";
+import { buildSearXNGProvider } from "./searxngProvider";
+import { buildMockProvider } from "./mockProvider";
+import { SearXNGClient } from "../search/searxng";
+
+export const PROVIDER_NAME = "searxng";
+export const PROVIDER_MAXIMUMS = {
+  maxPages: 50,
+};
+
+/** Resolve the goal-seek SearXNG configuration that a client should use. */
+export function resolveSearXNGConfig(env: Record<string, string | undefined>) {
+  const url = env.SEARXNG_URL?.trim();
+  if (!url) return null;
+  return {
+    searxngUrl: url,
+    timeoutMs: Number(env.SEARCH_TIMEOUT_MS ?? "10000"),
+    maxResults: Number(env.SEARCH_MAX_RESULTS ?? "15"),
+  };
+}
+
+/** Detect whether a live SearXNG config is present (for the health/debug query). */
+export function detectSearXNGConfig(env: Record<string, string | undefined>) {
+  const cfg = resolveSearXNGConfig(env);
+  if (!cfg) return null;
+  // Do not return the URL — it is a server-side secret.
+  return { configured: true };
+}
+
+/** Client used by the SearXNG provider (imported by secret-free health actions). */
+export { SearXNGClient } from "../search/searxng";
 
 /**
- * Choose the live sources for a run.
+ * Build the research provider for the current environment.
  *
- * - `SEARXNG_URL` → the self-hosted SearXNG instance (the primary source).
- * - `GEMINI_API_KEY` → Google Search grounding through Gemini (an optional
- *   extra source, merged with SearXNG when both are configured).
- * - Neither configured, or demo mode forced → the mock provider (clearly
- *   labelled DEMO in the UI).
- *
- * SearXNG needs no key at all. The Google source is strictly optional: if it
- * is misconfigured, over quota or unbilled, its batch comes back empty and the
- * run continues on the sources that did answer.
+ * When `SEARXNG_URL` is set the provider calls the self-hosted instance.
+ * When it is absent the pipeline falls back to the mock provider so the app
+ * keeps running while still being honest that the data is demo data.
  */
 export function createResearchProvider(
-  env: Record<string, string | undefined> = {},
-): { provider: ResearchProvider; demoMode: boolean } {
-  if (env.JOBI_FORCE_DEMO === "1" || env.JOBI_FORCE_DEMO === "true") {
-    return { provider: mockResearchProvider, demoMode: true };
-  }
+  env: Record<string, string | undefined>,
+): {
+  provider: ResearchProvider;
+  demoMode: boolean;
+} {
+  const searxngCfg = resolveSearXNGConfig(env);
 
-  const live: ResearchProvider[] = [];
+  const provider: ResearchProvider = searxngCfg
+    ? buildSearXNGProvider(searxngCfg)
+    : buildMockProvider(env);
 
-  const searxngConfig = resolveSearXNGConfig(env);
-  if (searxngConfig) {
-    live.push(new SearXNGProvider(new SearXNGClient(searxngConfig)));
-  }
-
-  const geminiConfig = resolveGeminiConfig(env);
-  if (geminiConfig) {
-    live.push(new GeminiProvider(new GeminiSearchClient(geminiConfig)));
-  }
-
-  if (live.length === 1) return { provider: live[0], demoMode: false };
-  if (live.length > 1) {
-    return { provider: new CompositeProvider(live), demoMode: false };
-  }
-  return { provider: mockResearchProvider, demoMode: true };
+  return {
+    provider,
+    demoMode: !searxngCfg,
+  };
 }

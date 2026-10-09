@@ -19,7 +19,7 @@ describe("runResearch — normalise, match, compare", () => {
       hooks: { onStage: (key) => void stages.push(key) },
     });
 
-    expect(stages).toEqual(["discover", "check", "compare", "verify"]);
+    expect(stages).toEqual(["discover", "extract", "check", "compare", "verify"]);
     expect(result.offers.length).toBeGreaterThan(0);
     expect(result.metrics.offersFound).toBeGreaterThan(0);
 

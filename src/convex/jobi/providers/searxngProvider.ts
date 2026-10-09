@@ -1,89 +1,142 @@
-import type { RawSearchResult, ResearchProvider } from "../types";
-import { providerForHostname, sanitizeUntrustedText } from "../urlSafety";
-import { SearXNGClient, type SearXNGResult } from "../search/searxng";
+import type {
+  ParsedQuery,
+  RawSearchResult,
+  ResearchContext,
+  ResearchProvider,
+} from "../types";
+import { SearXNGClient } from "../search/searxng";
+import { sanitizeUntrustedText } from "../urlSafety";
+import { PROVIDER_MAXIMUMS, PROVIDER_NAME } from "./index";
 
-/**
- * SearXNGProvider — the live search provider.
- *
- * It discovers publicly available hotel/booking pages through the self-hosted
- * SearXNG instance. It never scrapes booking sites directly, never bypasses
- * CAPTCHA / login / bot protection, and only reads the snippets SearXNG already
- * returns. Any source that cannot be reached is simply skipped.
- *
- * Text from the web is treated as untrusted DATA and sanitised. Prices found in
- * snippets are always surfaced as OBSERVED — never VERIFIED.
- */
-
-/** Booking platforms we prefer to surface first when they appear. */
-const BOOKING_SOURCES = new Set([
-  "Booking.com",
-  "Agoda",
-  "MakeMyTrip",
-  "Goibibo",
-  "Cleartrip",
-  "Yatra",
-  "Expedia",
-  "Hotels",
-  "Trivago",
-  "OYO",
-  "Treebo",
-  "FabHotels",
-  "Official hotel site",
-]);
-
-/** Rank a result so known booking providers come first. */
-function sourceRank(provider: string | undefined): number {
-  if (provider && BOOKING_SOURCES.has(provider)) return 0;
-  return 1;
+interface ProviderConfig {
+  searxngUrl: string;
+  timeoutMs: number;
+  maxResults: number;
 }
 
-/** Convert one normalized SearXNG result into a RawSearchResult. */
-export function toRawSearchResult(result: SearXNGResult): RawSearchResult {
-  const snippet = sanitizeUntrustedText(result.snippet, 600);
-  const providerName = providerForHostname(result.source);
-  const hasPrice = result.price !== null;
+export { buildSearXNGProvider } from "./index";
+
+function providerNameForSource(source: string, rawResult?: { hotelName?: string }) {
+  const base = source.replace(/^www\./, "").split(".")[0];
+  if (rawResult?.hotelName) {
+    return {
+      providerName: sanitizeUntrustedText(base) || source,
+      hotelName: sanitizeUntrustedText(rawResult.hotelName) || sanitizeUntrustedText(rawResult.hotelName ?? ""),
+    };
+  }
+  return { providerName: sanitizeUntrustedText(base) || source, hotelName: sanitizeUntrustedText(rawResult?.hotelName ?? "") };
+}
+
+/** Turn a single SearXNG result into a `RawSearchResult`. */
+function toRawSearchResult(
+  result: SearXNGClient.SearXNGResultType,
+  parsed: ParsedQuery,
+  extracted?: {
+    hotelName?: string;
+    providerName?: string;
+    rawHtml?: string;
+    price?: number;
+    currency?: string;
+    rating?: number;
+  },
+): RawSearchResult {
+  const { providerName, hotelName: extractedHotelName } = providerNameForSource(result.source, extracted);
+
+  const snippet = sanitizeUntrustedText(
+    extracted?.rawHtml
+      ? stripHtml(extracted.rawHtml).slice(0, 600)
+      : result.snippet ?? "",
+  );
+
+  const observedPrice = extracted?.price ?? result.price;
+  const observedCurrency = extracted?.currency ?? result.currency ?? "INR";
 
   return {
-    title: sanitizeUntrustedText(result.title, 200) || result.url,
+    title: sanitizeUntrustedText(result.title),
     url: result.url,
     snippet,
     source: result.source,
+    observedPrice,
+    observedCurrency,
     providerName,
-    hotelName: result.hotelName ?? undefined,
-    observedPrice: hasPrice ? result.price ?? undefined : undefined,
-    observedCurrency: result.currency ?? undefined,
-    rating: result.rating ?? undefined,
-    priceStatus: "observed",
-    confidence: hasPrice ? "low" : "low",
-    notes: hasPrice
-      ? "Price observed in a public search result — not verified for your exact dates."
-      : "Source discovered via search. No price was published in the result.",
+    hotelName: extracted?.hotelName ?? extractedHotelName,
+    rating: extracted?.rating ?? result.rating,
+    notes: extracted?.rawHtml ? "Page fetched and parsed." : "From search result snippet.",
   };
 }
 
-export class SearXNGProvider implements ResearchProvider {
-  name = "searxng";
-  live = true;
+/** Strip tags from a small HTML snippet for a human-readable fallback. */
+function stripHtml(html: string): string {
+  return html
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, "'")
+    .replace(/&#39;/gi, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
-  private readonly client: SearXNGClient;
+function isBookPageUrl(url: string): boolean {
+  if (!url) return false;
+  const u = url.toLowerCase();
+  return (
+    /\/(?:hotel|resort|property|rooms?|room|book|check[- ]?in|stay|inn|reserv)/.test(u) ||
+    /[?&](room|roomid|hotel|property|check.?in|check.?out|guests|rooms)=/.test(u) ||
+    /booking\.com/.test(u) ||
+    /agoda\.com/.test(u) ||
+    /expedia\.com/.test(u) ||
+    /hotels\.com/.test(u) ||
+    /trip\.com/.test(u) ||
+    /makemytrip\.com/.test(u)
+  );
+}
 
-  constructor(client: SearXNGClient) {
-    this.client = client;
-  }
+function rawClient(cfg: ProviderConfig) {
+  return new SearXNGClient(cfg.searxngUrl, {
+    timeoutMs: cfg.timeoutMs,
+    maxResults: cfg.maxResults,
+  });
+}
 
-  async search(query: string): Promise<RawSearchResult[]> {
-    const results = await this.client.search(query);
-    return results
-      .map((result) => ({ result, raw: toRawSearchResult(result) }))
-      .sort((a, b) => {
-        const rank = sourceRank(a.raw.providerName) - sourceRank(b.raw.providerName);
-        if (rank !== 0) return rank;
-        // Prefer results that actually surfaced a price.
-        const priceRank =
-          (a.raw.observedPrice === undefined ? 1 : 0) -
-          (b.raw.observedPrice === undefined ? 1 : 0);
-        return priceRank;
-      })
-      .map((entry) => entry.raw);
-  }
+/**
+ * A research provider that queries a self-hosted SearXNG instance and reads
+ * whatever structured data SearXNG can surface (or that we can read from the
+ * snippet/HTML the extractor returns).
+ *
+ * All prices/observed fields coming out of this provider are OBSERVED unless the
+ * extractor explicitly returns verified structured data.
+ */
+export function buildSearXNGProvider(config: ProviderConfig): ResearchProvider {
+  const client = rawClient(config);
+
+  return {
+    name: PROVIDER_NAME,
+    live: true,
+
+    async search(query: string, ctx: ResearchContext) {
+      const results = await client.search(query, {
+        budget: ctx.budget,
+        startedAt: ctx.startedAt,
+      });
+
+      const normalized: RawSearchResult[] = [];
+      for (const r of results) {
+        if (!isBookPageUrl(r.url)) continue;
+
+        const extracted = ctx.__extractedByUrl?.[r.url] ?? undefined;
+
+        const raw = toRawSearchResult(r, ctx.parsed, extracted);
+        normalized.push(raw);
+
+        if (normalized.length >= PROVIDER_MAXIMUMS.maxPages) break;
+      }
+
+      return normalized;
+    },
+  };
 }

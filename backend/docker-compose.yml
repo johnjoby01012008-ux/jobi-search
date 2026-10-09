@@ -1,0 +1,21 @@
+version: "3.9"
+
+services:
+  extractor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "127.0.0.1:8010:8010"
+    environment:
+      - EXTRACT_DISABLE_PLAYWRIGHT=1
+      - EXTRACT_MAX_URLS_PER_BATCH=30
+      - EXTRACT_FETCH_TIMEOUT_SECONDS=15
+      - EXTRACT_PLAYWRIGHT_MAX_CONCURRENT=2
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8010/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

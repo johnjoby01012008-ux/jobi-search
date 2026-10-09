@@ -85,6 +85,12 @@ class ExtractionResult(BaseModel):
     notes: dict[str, Any] = Field(default_factory=dict)
 
 
+class ExtractResult(ExtractionResult):
+    """Compatibility alias. The batch endpoint and package exports use this name."""
+
+    pass
+
+
 # ---------------------------------------------------------------------------
 # Batch / search session schemas
 # ---------------------------------------------------------------------------

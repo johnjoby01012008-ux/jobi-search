@@ -91,43 +91,62 @@ def _is_hotel_like(node: dict[str, Any]) -> bool:
     return bool(hotel_types & set(types))
 
 
+def _coerce_price_amount(value: Any) -> float | None:
+    """Accept price values that arrive as int/float or numeric strings
+    ("8900", "8,900.50", "INR 8900"). Returns None when unparsable."""
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value) if value > 0 else None
+    if isinstance(value, str):
+        text = value.strip().replace(",", "")
+        # Strip an optional leading currency marker ("₹8900", "$120", "INR 8900").
+        text = re.sub(r"^(?:₹|rs\.?|inr|us\$|\$|€|£|usd|eur|gbp)\s*", "", text, flags=re.IGNORECASE)
+        try:
+            amount = float(text)
+        except ValueError:
+            return None
+        return amount if amount > 0 else None
+    return None
+
+
 def _pick_price_from_offers(node: dict[str, Any]) -> dict[str, Any] | None:
     """Try to pull a price from Offer / AggregateOffer / PriceSpecification shapes."""
     # AggregateOffer: lowPrice / highPrice / priceCurrency
     agg = node.get("aggregateOffer")
     if isinstance(agg, dict):
         for key in ("lowPrice", "price", "highPrice"):
-            v = agg.get(key)
-            if v is not None and isinstance(v, (int, float)) and v > 0:
+            amount = _coerce_price_amount(agg.get(key))
+            if amount is not None:
                 cur = agg.get("priceCurrency") or node.get("priceCurrency") or "INR"
-                return {"amount": float(v), "currency": _norm_currency(cur)}
+                return {"amount": amount, "currency": _norm_currency(cur)}
 
     # Direct Offer / Offer-like: price + priceCurrency
-    for key in ("offer", "offers", "price", "priceSpecification", "eligibleTransactionVolume"):
+    for key in ("offer", "offers", "makesOffer", "makesOfferProduct", "price", "priceSpecification", "eligibleTransactionVolume"):
         child = node.get(key)
         if isinstance(child, dict):
-            price = child.get("price") if key in ("offer", "offers", "price") else None
-            if price is None and isinstance(child.get("price"), (int, float)):
-                price = child["price"]
-            if price is not None and isinstance(price, (int, float)) and price > 0:
+            price = _coerce_price_amount(child.get("price"))
+            if price is not None:
                 cur = child.get("priceCurrency") or node.get("priceCurrency") or "INR"
-                return {"amount": float(price), "currency": _norm_currency(cur)}
-            # Nested: { "@type": "Offer", "price": ... }
+                return {"amount": price, "currency": _norm_currency(cur)}
+            # Nested: { "@type": "PriceSpecification", "price": ... }
             if isinstance(child.get("price"), dict):
-                p = child["price"].get("price")
-                if p is not None and isinstance(p, (int, float)):
+                p = _coerce_price_amount(child["price"].get("price"))
+                if p is not None:
                     cur = child["price"].get("priceCurrency") or node.get("priceCurrency") or "INR"
-                    return {"amount": float(p), "currency": _norm_currency(cur)}
+                    return {"amount": p, "currency": _norm_currency(cur)}
 
     # List of offers
     offers = node.get("offers")
     if isinstance(offers, list):
         for off in offers:
             if isinstance(off, dict):
-                p = off.get("price")
-                if p is not None and isinstance(p, (int, float)) and p > 0:
+                p = _coerce_price_amount(off.get("price"))
+                if p is not None:
                     cur = off.get("priceCurrency") or node.get("priceCurrency") or "INR"
-                    return {"amount": float(p), "currency": _norm_currency(cur)}
+                    return {"amount": p, "currency": _norm_currency(cur)}
 
 
 def _norm_currency(code: Any) -> str:

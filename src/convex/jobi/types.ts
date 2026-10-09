@@ -145,6 +145,8 @@ export interface ComparisonOffer {
 export interface Comparison {
   verified: ComparisonOffer[];
   observed: ComparisonOffer[];
+  /** Currency all numeric totals are ranked within; foreign-currency offers rank after it. */
+  referenceCurrency: string;
   /** The cheapest offer with verified pricing — the only thing Jobi may call "cheapest". */
   cheapestVerified?: ComparisonOffer;
   /** Cheapest unverified price, surfaced transparently but never as "cheapest". */

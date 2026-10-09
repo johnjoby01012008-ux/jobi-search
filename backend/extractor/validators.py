@@ -10,6 +10,13 @@ from __future__ import annotations
 import ipaddress
 import re
 from typing import Final
+from urllib.parse import urlparse
+
+
+def _parse_url_no_resolve(url: str):
+    """Parse a URL without any DNS resolution. Narrow wrapper over urlparse so
+    the SSRF checks stay testable offline."""
+    return urlparse(url)
 
 
 # ---------------------------------------------------------------------------
@@ -71,8 +78,9 @@ def is_allowed_url(url: str) -> bool:
     if parsed.scheme not in ALLOWED_SCHEMES:
         return False
 
-    hostname = parsed.hostname.lower()
-    if not hostname or not hostname.startswith("."):
+    hostname = parsed.hostname or ""
+    hostname = hostname.lower()
+    if not hostname or "." not in hostname:
         return False
 
     # Reject bare IPs / localhost / metadata hosts early.
@@ -204,7 +212,9 @@ def price_cannot_be_review_count(text: str, value: float) -> bool:
         return True
     if value > 10_000_000:
         return True
-    # If there's explicit "out of" / "stars" language, it's probably a rating.
-    if re.search(r"\d+(\.\d+)?\s*(?:out of|stars?|star)", t):
+    # Only reject when the value itself qualifies as a rating (0–10 range).
+    # A real hotel total that happens to sit near "4.2 out of 5 (312 reviews)"
+    # in the same card must NOT be discarded — so large values stay admitted.
+    if value <= 10 and re.search(r"\d+(\.\d+)?\s*(?:out of|stars?|star)", t):
         return False
     return True

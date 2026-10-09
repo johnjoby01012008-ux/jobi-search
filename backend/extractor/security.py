@@ -148,11 +148,18 @@ def fetch_page(
     # Use a standard client but with a custom redirect validator via event hooks.
     # httpx doesn't expose a clean per-redirect hook, so we fetch with
     # follow_redirects=False and validate each step ourselves.
+    # Only enable HTTP/2 when the optional `h2` package is installed; otherwise
+    # gracefully degrade to HTTP/1.1 so the fetch never hard-fails at startup.
+    try:
+        import h2  # noqa: F401
+        use_http2 = True
+    except ImportError:
+        use_http2 = False
     client = httpx.Client(
         limits=limits,
         timeout=timeout,
         follow_redirects=False,
-        http2=True,
+        http2=use_http2,
     )
 
     redirect_chain: list[str] = []

@@ -79,11 +79,43 @@ export function describeOfferDifferences(base: HotelOffer, other: HotelOffer): s
     differences.push("Mandatory fees differ");
   }
 
-  if ((base.currency ?? "INR") !== (other.currency ?? "INR")) {
-    differences.push(`Different currency (${other.currency} vs ${base.currency})`);
+  const baseCurrency = base.currency ?? "INR";
+  const otherCurrency = other.currency ?? "INR";
+  if (baseCurrency !== otherCurrency) {
+    differences.push(`Different currency (${otherCurrency} vs ${baseCurrency}) — prices are not comparable across currencies without conversion`);
+    return differences;
   }
 
   return differences;
+}
+
+/**
+ * Currency-aware comparison. Offers in different currencies are NEVER ranked
+ * against each other numerically — a "100 USD" total must never beat an
+ * "INR 8,000" total just because 100 < 8000, since no conversion is applied.
+ * The reference currency is the most common one among verified offers; every
+ * foreign-currency offer is annotated and ranked after the primary group.
+ */
+function currencyOf(offer: HotelOffer): string {
+  return (offer.currency ?? "INR").trim().toUpperCase() || "INR";
+}
+
+function pickReferenceCurrency(verified: ComparisonOffer[]): string {
+  const counts = new Map<string, number>();
+  for (const entry of verified) {
+    const currency = currencyOf(entry.offer);
+    counts.set(currency, (counts.get(currency) ?? 0) + 1);
+  }
+  let best = "INR";
+  let bestCount = -1;
+  for (const [currency, count] of counts) {
+    // Ties prefer INR (the product's default) — deterministic and honest.
+    if (count > bestCount || (count === bestCount && currency === "INR")) {
+      best = currency;
+      bestCount = count;
+    }
+  }
+  return best;
 }
 
 /** Build the full comparison split into verified and observed buckets. */
@@ -92,13 +124,26 @@ export function buildComparison(offers: HotelOffer[]): Comparison {
     .map(toComparison)
     .filter((o): o is ComparisonOffer => o !== null);
 
-  const verified = converted
-    .filter((o) => o.isVerified)
-    .sort((a, b) => a.total - b.total);
+  const verifiedAll = converted.filter((o) => o.isVerified);
+  const observedAll = converted.filter((o) => !o.isVerified);
 
-  const observed = converted
-    .filter((o) => !o.isVerified)
+  // Rank only within the reference currency; foreign-currency offers follow it.
+  const referenceCurrency = pickReferenceCurrency(verifiedAll);
+  const verifiedSame = verifiedAll
+    .filter((o) => currencyOf(o.offer) === referenceCurrency)
     .sort((a, b) => a.total - b.total);
+  const verifiedOther = verifiedAll
+    .filter((o) => currencyOf(o.offer) !== referenceCurrency)
+    .sort((a, b) => a.total - b.total);
+  const verified = [...verifiedSame, ...verifiedOther];
+
+  const observedSame = observedAll
+    .filter((o) => currencyOf(o.offer) === referenceCurrency)
+    .sort((a, b) => a.total - b.total);
+  const observedOther = observedAll
+    .filter((o) => currencyOf(o.offer) !== referenceCurrency)
+    .sort((a, b) => a.total - b.total);
+  const observed = [...observedSame, ...observedOther];
 
   const cheapestVerified = verified[0];
   const cheapestObserved = observed[0];
@@ -132,6 +177,7 @@ export function buildComparison(offers: HotelOffer[]): Comparison {
   return {
     verified,
     observed,
+    referenceCurrency,
     cheapestVerified,
     cheapestObserved,
     averageVerified,

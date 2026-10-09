@@ -14,7 +14,8 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from .schemas import ExtractionResult, ExtractedHotel, FetchResult
+from .schemas import ExtractionResult, ExtractedHotel
+from .security import FetchResult
 from .extractor import extract_from_page
 from .normalizer import normalize_offer
 

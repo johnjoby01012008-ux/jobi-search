@@ -113,20 +113,41 @@ def _extract_prices_from_text(text: str) -> list[dict[str, Any]]:
 
 
 def _currency_from_marker(marker: str) -> str | None:
-    m = marker.lower().replace("usd", "usd").replace("us$", "usd").replace("$", "usd")
-    m = m.replace("eur", "eur").replace("€", "eur").replace("gbp", "gbp").replace("£", "gbp")
-    m = m.replace("inr", "inr").replace("rs.", "inr").replace("₹", "inr")
-    m = m.replace("sgd", "sgd").replace("aed", "aed").replace("د.إ", "aed")
-    m = m.replace("aud", "aud").replace("cad", "cad").replace("nzd", "nzd").replace("hkd", "hkd")
-    m = m.replace("r$", "brl").replace("r", "brl")
-    m = m.replace("₩", "krw").replace("¥", "jpy")
-    mapping: dict[str, str] = {
-        "usd": "USD", "eur": "EUR", "gbp": "GBP", "inr": "INR",
-        "sgd": "SGD", "aed": "AED", "aud": "AUD", "cad": "CAD",
-        "nzd": "NZD", "hkd": "HKD", "brl": "BRL", "krw": "KRW",
+    """Map the exact regex-captured currency marker to an ISO code.
+
+    IMPORTANT: match the marker directly — the previous chained .replace()
+    approach corrupted every marker containing the letter "r" (INR → ibrl,
+    EUR → eubrl, KRW → kbrlw), so no price ever mapped to a currency and the
+    HTML fallback silently found zero prices.
+    """
+    m = marker.strip().lower()
+    marker_map: dict[str, str] = {
+        "₹": "INR",
+        "rs": "INR",
+        "rs.": "INR",
+        "inr": "INR",
+        "$": "USD",
+        "us$": "USD",
+        "usd": "USD",
+        "€": "EUR",
+        "eur": "EUR",
+        "£": "GBP",
+        "gbp": "GBP",
+        "sgd": "SGD",
+        "aed": "AED",
+        "د.إ": "AED",
+        "aud": "AUD",
+        "cad": "CAD",
+        "nzd": "NZD",
+        "hkd": "HKD",
+        "r$": "BRL",
+        "r": "BRL",
+        "₩": "KRW",
+        "krw": "KRW",
+        "¥": "JPY",
         "jpy": "JPY",
     }
-    return mapping.get(m)
+    return marker_map.get(m)
 
 
 def _price_near_context(node, text: str, amount: float, currency: str) -> dict[str, Any] | None:
@@ -423,9 +444,11 @@ def _better_price(existing: dict[str, Any] | None, candidate: dict[str, Any]) ->
     """Prefer a total / per-night price over a starting_from price of the same magnitude."""
     if existing is None:
         return True
-    if existing["price_type"] == "total" and candidate["price_type"] != "total":
+    existing_type = existing.get("price_type", "unknown")
+    candidate_type = candidate.get("price_type", "unknown")
+    if existing_type == "total" and candidate_type != "total":
         return False
-    if candidate["price_type"] == "total" and existing["price_type"] != "total":
+    if candidate_type == "total" and existing_type != "total":
         return True
     return abs(candidate["amount"] - existing["amount"]) > 0.01
 

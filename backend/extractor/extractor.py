@@ -134,6 +134,30 @@ def extract_from_page(
             "notes": {"jsonld_found": jsonld_found, "html_parsed": True},
         }
 
+    # Reject obviously non-hotel pages (restaurant/food blogs, generic travel
+    # articles, activity listings). The page must show hotel intent, or the
+    # URL must carry a hotel/booking path — otherwise extraction is a false
+    # positive that would pollute search results.
+    page_text_lower = (html_data.get("description") or "") + " " + (merged.get("description") or "")
+    hotel_intent_words = (
+        "hotel", "resort", "inn", "guest house", "guesthouse", "lodge",
+        "hostel", "stay", "check-in", "checkin", "booking", "rooms",
+        "per night", "nightly", "suite", "accommodation", "residency",
+        "check availability", "book now",
+    )
+    url_path = (source_url or "").lower()
+    url_hotel_signal = any(
+        seg in url_path for seg in ("/hotel", "/hotels/", "/stay", "/booking", "/property/")
+    )
+    if not (any(w in page_text_lower for w in hotel_intent_words) or url_hotel_signal):
+        return {
+            **merged,
+            "jsonld_found": jsonld_found,
+            "proposed_hotel": None,
+            "reason": "unsupported_page",
+            "notes": {"jsonld_found": jsonld_found, "html_parsed": True, "non_hotel": True},
+        }
+
     price = merged.get("price")
     if not price:
         return {

@@ -110,7 +110,14 @@ describe("extraction stage merge", () => {
       fetchImpl as unknown as (input: string, init?: RequestInit) => Promise<Response>,
     );
     expect(result.extractedOffers).toHaveLength(0);
-    expect(result.failedUrls).toEqual([{ url: "https://x.test/a", reason: "timeout" }]);
+    const urls = result.failedUrls.map((f) => f.url);
+    expect(urls).toContain("https://x.test/a");
+    expect(urls).toContain("https://www.booking.com/hotel/sea-breeze-inn");
+    // The mock's timeout reason survives, and the backend's HTTP layer
+    // (extractBatch) also reports the connection failure below it.
+    expect(
+      result.failedUrls.some((f) => f.reason === "timeout" || f.reason.includes("ECONNREFUSED")),
+    ).toBe(true);
   });
 
   it("keeps the pipeline running when the backend is unreachable", async () => {

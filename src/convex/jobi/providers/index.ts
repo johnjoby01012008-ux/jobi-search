@@ -7,49 +7,52 @@
  * `createResearchProvider(env)` is the single place that decides which provider
  * (or combination) is active right now. Add a new provider here and the
  * research engine picks it up automatically.
- *
- * Provider construction is done per-run so that per-request timeouts and
- * search context are explicit.
  */
 
 import type { ResearchProvider } from "../types";
-import { buildSearXNGProvider } from "./searxngProvider";
-import { buildMockProvider } from "./mockProvider";
-import { SearXNGClient } from "../search/searxng";
+import { SearXNGProvider } from "./searxngProvider";
+import { mockResearchProvider } from "./mockProvider";
+import { GeminiProvider } from "./geminiProvider";
+import { CompositeProvider } from "./compositeProvider";
+import {
+  GeminiSearchClient,
+  resolveGeminiConfig,
+} from "../search/gemini";
+import {
+  resolveSearXNGConfig,
+  SearXNGClient,
+  type SearXNGConfig,
+} from "../search/searxng";
 
-export const PROVIDER_NAME = "searxng";
-export const PROVIDER_MAXIMUMS = {
-  maxPages: 50,
-};
+export { SearXNGProvider } from "./searxngProvider";
+export { GeminiProvider } from "./geminiProvider";
 
-/** Resolve the goal-seek SearXNG configuration that a client should use. */
-export function resolveSearXNGConfig(env: Record<string, string | undefined>) {
-  const url = env.SEARXNG_URL?.trim();
-  if (!url) return null;
-  return {
-    searxngUrl: url,
-    timeoutMs: Number(env.SEARCH_TIMEOUT_MS ?? "10000"),
-    maxResults: Number(env.SEARCH_MAX_RESULTS ?? "15"),
-  };
+/**
+ * Which live sources are configured right now. Kept secret-free so a health
+ * query can call it and still pass the result to the frontend.
+ */
+export function detectLiveSources(env: Record<string, string | undefined>): string[] {
+  const sources: string[] = [];
+  if (env.JOBI_FORCE_DEMO === "1" || env.JOBI_FORCE_DEMO === "true") return sources;
+  if (resolveSearXNGConfig(env)) sources.push("searxng");
+  if (resolveGeminiConfig(env)) sources.push(GeminiProvider.name);
+  return sources;
 }
 
-/** Detect whether a live SearXNG config is present (for the health/debug query). */
 export function detectSearXNGConfig(env: Record<string, string | undefined>) {
-  const cfg = resolveSearXNGConfig(env);
-  if (!cfg) return null;
+  const config = resolveSearXNGConfig(env);
+  if (!config) return null;
   // Do not return the URL — it is a server-side secret.
   return { configured: true };
 }
 
-/** Client used by the SearXNG provider (imported by secret-free health actions). */
-export { SearXNGClient } from "../search/searxng";
-
 /**
  * Build the research provider for the current environment.
  *
- * When `SEARXNG_URL` is set the provider calls the self-hosted instance.
- * When it is absent the pipeline falls back to the mock provider so the app
- * keeps running while still being honest that the data is demo data.
+ * Live sources (SearXNG + optional Gemini grounding) are all composed into one
+ * provider, de-duplicated by the CompositeProvider. When none is configured the
+ * pipeline falls back to the mock provider so the app keeps running while still
+ * being honest that the data is demo data.
  */
 export function createResearchProvider(
   env: Record<string, string | undefined>,
@@ -57,14 +60,24 @@ export function createResearchProvider(
   provider: ResearchProvider;
   demoMode: boolean;
 } {
-  const searxngCfg = resolveSearXNGConfig(env);
+  const config = resolveSearXNGConfig(env);
+  const provider: ResearchProvider = config
+    ? new SearXNGProvider(new SearXNGClient(config as SearXNGConfig))
+    : mockResearchProvider;
 
-  const provider: ResearchProvider = searxngCfg
-    ? buildSearXNGProvider(searxngCfg)
-    : buildMockProvider(env);
+  const gemini = resolveGeminiConfig(env);
+  const geminiProvider = gemini ? new GeminiProvider(new GeminiSearchClient(gemini)) : null;
 
-  return {
-    provider,
-    demoMode: !searxngCfg,
-  };
+  const liveProviders = [provider, geminiProvider].filter(
+    (p): p is ResearchProvider => p !== null && p.live,
+  );
+
+  if (liveProviders.length === 0) {
+    return { provider: mockResearchProvider, demoMode: true };
+  }
+
+  const merged =
+    liveProviders.length === 1 ? liveProviders[0] : new CompositeProvider(liveProviders);
+
+  return { provider: merged, demoMode: false };
 }

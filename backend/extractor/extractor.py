@@ -134,10 +134,13 @@ def extract_from_page(
             "notes": {"jsonld_found": jsonld_found, "html_parsed": True},
         }
 
-    # Reject obviously non-hotel pages (restaurant/food blogs, generic travel
-    # articles, activity listings). The page must show hotel intent, or the
-    # URL must carry a hotel/booking path — otherwise extraction is a false
-    # positive that would pollute search results.
+    # Reject genuinely non-hotel pages (restaurant/food blogs, generic travel
+    # articles, activity listings). The page must carry a hotel signal — a real
+    # hotel name (hotel/resort/inn/lodge/etc.), a booking-path URL, OR a price
+    # that is clearly a hotel rate (per-night / total for the stay). A bare
+    # "Min. Offer" domain listing is not same as a hotel, so we require a
+    # second, independent signal. Return the current page for review when
+    # ambiguous so nothing is silently dropped and nothing is falsified.
     page_text_lower = (html_data.get("description") or "") + " " + (merged.get("description") or "")
     hotel_intent_words = (
         "hotel", "resort", "inn", "guest house", "guesthouse", "lodge",
@@ -149,7 +152,29 @@ def extract_from_page(
     url_hotel_signal = any(
         seg in url_path for seg in ("/hotel", "/hotels/", "/stay", "/booking", "/property/")
     )
-    if not (any(w in page_text_lower for w in hotel_intent_words) or url_hotel_signal):
+    price_is_hotel_like = False
+    if merged.get("price"):
+        pc = merged["price_context"] or {}
+        price_type = str(pc.get("price_type", ""))
+        nearby = " ".join(str(x) for x in pc.get("nearby_hints", []) or [])
+        if price_type in ("per_night", "nightly"):
+            price_is_hotel_like = True
+        elif price_type == "total":
+            # Total for the stay is a hotel price only when guests/nights are
+            # explicit nearby, or the snippet carries a "2 rooms" style signal.
+            if nearby and any(w in nearby for w in ("night", "guest", "room")):
+                price_is_hotel_like = True
+        elif price_type == "starting_from":
+            # Starting-from prices are treated as hotel rates only when a
+            # nearby "per night" or "total" phrasing exists; otherwise they
+            # stay observed (never promoted to verified).
+            price_is_hotel_like = False
+        # "unknown" context is left for the caller; the gate treats it as
+        # ambiguous and keeps the page for manual review instead of a hard
+        # reject the moment price verification is unknown.
+    if not (any(w in page_text_lower for w in hotel_intent_words) or url_hotel_signal or price_is_hotel_like):
+        # The page has no hotel signal, the URL is not a booking path, and the
+        # price is not hotel-like. Reject cleanly.
         return {
             **merged,
             "jsonld_found": jsonld_found,

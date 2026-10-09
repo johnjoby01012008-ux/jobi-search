@@ -1,11 +1,10 @@
-import type { RawSearchResult, ResearchProvider } from "../types";
+import type { RawSearchResult, ResearchProvider, ParsedQuery, ResearchContext } from "../types";
 import type { SearXNGClient, SearXNGResult } from "../search/searxng";
 import {
   PROVIDER_ALLOWLIST,
   providerForHostname,
   sanitizeUntrustedText,
 } from "../urlSafety";
-import type { ParsedQuery } from "../types";
 
 /**
  * SearXNGProvider — the primary live research source.
@@ -37,8 +36,8 @@ export function toRawSearchResult(
     observedPrice: hasPrice ? (result.price ?? undefined) : undefined,
     observedCurrency: hasPrice ? (result.currency ?? "INR") : undefined,
     providerName,
-    hotelName: result.hotelName,
-    rating: result.rating,
+    hotelName: result.hotelName ?? undefined,
+    rating: result.rating ?? undefined,
     priceStatus: "observed",
     confidence: "low",
     notes: hasPrice
@@ -68,13 +67,15 @@ export class SearXNGProvider implements ResearchProvider {
     this.parsed = parsed;
   }
 
-  async search(query: string): Promise<RawSearchResult[]> {
-    const results = await this.client.search(query);
+  async search(query: string, ctx?: ResearchContext): Promise<RawSearchResult[]> {
+    const client = this.client;
+    const results = await client.search(query);
     const rows = results
-      .map((result) => toRawSearchResult(result, this.parsed))
+      .map((result) => toRawSearchResult(result, ctx?.parsed ?? this.parsed))
       // Every result still counts as a "source checked"; we only filter empty
       // titles so the normaliser never produces a nameless offer.
       .filter((row) => row.hotelName || row.title);
-    return rows.sort((a, b) => relevance(b) - relevance(a));
+    rows.sort((a, b) => relevance(b) - relevance(a));
+    return rows;
   }
 }

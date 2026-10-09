@@ -1,6 +1,8 @@
+
 import type { RawSearchResult, ResearchProvider } from "../types";
 import type { SearXNGClient, SearXNGResult } from "../search/searxng";
 import { providerForHostname, sanitizeUntrustedText } from "../urlSafety";
+import type { ParsedQuery } from "../types";
 
 /**
  * SearXNGProvider — the primary live research source.
@@ -10,7 +12,10 @@ import { providerForHostname, sanitizeUntrustedText } from "../urlSafety";
  * pipeline. Text from the web stays untrusted DATA and is sanitised on the way
  * in; observed prices are never reported as verified.
  */
-export function toRawSearchResult(result: SearXNGResult): RawSearchResult {
+export function toRawSearchResult(
+  result: SearXNGResult,
+  parsed: ParsedQuery,
+): RawSearchResult {
   const providerName = providerForHostname(result.source);
 
   // A price is only meaningful when a currency marker was present; `price` is
@@ -32,6 +37,11 @@ export function toRawSearchResult(result: SearXNGResult): RawSearchResult {
     notes: hasPrice
       ? "Price observed in a search snippet — not verified for your exact dates."
       : "No price found in the snippet — check the provider page for availability.",
+    destination: parsed.destination,
+    checkIn: parsed.checkIn,
+    checkOut: parsed.checkOut,
+    guests: parsed.guests,
+    rooms: parsed.rooms,
   };
 }
 
@@ -48,15 +58,17 @@ export class SearXNGProvider implements ResearchProvider {
   live = true;
 
   private readonly client: SearXNGClient;
+  private readonly parsed: ParsedQuery;
 
-  constructor(client: SearXNGClient) {
+  constructor(client: SearXNGClient, parsed: ParsedQuery) {
     this.client = client;
+    this.parsed = parsed;
   }
 
   async search(query: string): Promise<RawSearchResult[]> {
     const results = await this.client.search(query);
     const rows = results
-      .map(toRawSearchResult)
+      .map((result) => toRawSearchResult(result, this.parsed))
       // Every result still counts as a "source checked"; we only filter empty
       // titles so the normaliser never produces a nameless offer.
       .filter((row) => row.hotelName || row.title);

@@ -1,3 +1,4 @@
+
 /**
  * Pluggable research-provider registry.
  *
@@ -128,7 +129,7 @@ export const REGISTRY: Array<{
   },
 ];
 
-// Domain → registry id. Official hotel domains map to the special `official`
+// Domain => registry id. Official hotel domains map to the special `official`
 // provider entry.
 export function domainToProviderId(hostname: string): string | null {
   const lowered = hostname.toLowerCase();

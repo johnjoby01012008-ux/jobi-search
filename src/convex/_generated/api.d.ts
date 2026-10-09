@@ -19,6 +19,7 @@ import type * as http from "../http.js";
 import type * as jobi_access from "../jobi/access.js";
 import type * as jobi_catalogData from "../jobi/catalogData.js";
 import type * as jobi_config from "../jobi/config.js";
+import type * as jobi_diagnostic from "../jobi/diagnostic.js";
 import type * as jobi_engine from "../jobi/engine.js";
 import type * as jobi_extraction_extractAction from "../jobi/extraction/extractAction.js";
 import type * as jobi_extraction_extractStage from "../jobi/extraction/extractStage.js";
@@ -68,6 +69,7 @@ declare const fullApi: ApiFromModules<{
   "jobi/access": typeof jobi_access;
   "jobi/catalogData": typeof jobi_catalogData;
   "jobi/config": typeof jobi_config;
+  "jobi/diagnostic": typeof jobi_diagnostic;
   "jobi/engine": typeof jobi_engine;
   "jobi/extraction/extractAction": typeof jobi_extraction_extractAction;
   "jobi/extraction/extractStage": typeof jobi_extraction_extractStage;

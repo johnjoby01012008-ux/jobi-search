@@ -84,59 +84,28 @@ RUN if ! command -v uvicorn >/dev/null 2>&1; then \
       exit 1; \
     fi
 
-# The extractor must resolve uvicorn+FastAPI from its own isolated pip
-# target (/opt/extractor-libs), NOT from the official SearXNG venv, which
-# does not contain those packages in this image. We deliberately do not
-# install uvicorn into the SearXNG venv: doing so would mutate the official
-# image's Python environment and risk layout/permission mismatches. If the
-# configured extractor uvicorn is missing, the entrypoint refuses to start
-# with a clear, self-diagnosing failure instead of getting as far as
-# granian and pid-1 teardown.
 
-# The extractor must resolve uvicorn+FastAPI from its own isolated pip
-# target (/opt/extractor-libs), NOT from the official SearXNG venv, which
-# does not contain those packages in this image. We deliberately do not
-# install uvicorn into the SearXNG venv: doing so would mutate the official
-# image's Python environment and risk layout/permission mismatches. If the
-# configured extractor uvicorn is missing, the entrypoint refuses to start
-# with a clear, self-diagnosing failure instead of getting as far as
-# granian and pid-1 teardown.
-
-
-# The extractor must resolve uvicorn+FastAPI from its own isolated pip
-# target (/opt/extractor-libs), NOT from the official SearXNG venv, which
-# does not contain those packages in this image. We deliberately do not
-# install uvicorn into the SearXNG venv: doing so would mutate the official
-# image's Python environment and risk layout/permission mismatches. If the
-# configured extractor uvicorn is missing, the entrypoint refuses to start
-# with a clear, self-diagnosing failure instead of getting as far as
-# granian and pid-1 teardown.
-
-      echo "FATAL: extractor uvicorn not found in ${EXTRACTOR_PY_PREFIX}/bin" >&2; \
       exit 1; \
     fi
 
-# The extractor must resolve uvicorn+FastAPI from its own isolated pip
-# target (/opt/extractor-libs), NOT from the official SearXNG venv, which
-# does not contain those packages in this image. We deliberately do not
-# install uvicorn into the SearXNG venv: doing so would mutate the official
-# image's Python environment and risk layout/permission mismatches. If the
-# configured extractor uvicorn is missing, the entrypoint refuses to start
-# with a clear, self-diagnosing failure instead of getting as far as
-# granian and pid-1 teardown.
-
-      echo "FATAL: extractor uvicorn not found in ${EXTRACTOR_PY_PREFIX}/bin" >&2; \
       exit 1; \
     fi
 
-# The extractor must resolve uvicorn+FastAPI from its own isolated pip
-# target (/opt/extractor-libs), NOT from the official SearXNG venv, which
-# does not contain those packages in this image. We deliberately do not
-# install uvicorn into the SearXNG venv: doing so would mutate the official
-# image's Python environment and risk layout/permission mismatches. If the
-# configured extractor uvicorn is missing, the entrypoint refuses to start
-# with a clear, self-diagnosing failure instead of getting as far as
-# granian and pid-1 teardown.
+      exit 1; \
+    fi
+
+      exit 1; \
+    fi
+
+
+    fi
+
+    fi
+
+    fi
+
+    fi
+
 
 
 # The extractor must resolve uvicorn+FastAPI from its own isolated pip

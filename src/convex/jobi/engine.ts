@@ -3,8 +3,9 @@ import { assignCanonicalNames } from "./matching";
 import { dedupeOffers, normalizeResults } from "./normalize";
 import { buildComparison } from "./pricing";
 import { generateQueries } from "./queries";
-import { validateBookingUrl } from "./urlSafety";
+import { providerForHostname, validateBookingUrl } from "./urlSafety";
 import { runExtractionStage } from "./extraction/extractStage";
+import type { ProviderDiagnostic } from "./types";
 import type {
   Comparison,
   HotelOffer,
@@ -32,6 +33,8 @@ export interface EngineResult {
     unavailable: string[];
     limitations: string[];
     checkedAt: string;
+    /** Structured per-provider attempt records (see ./diagnostic). */
+    providerDiagnostics: ProviderDiagnostic[];
   };
   metrics: {
     sourcesFound: number;
@@ -68,6 +71,57 @@ export async function runResearch(params: {
   const limitations: string[] = [];
   let truncated = false;
 
+  /**
+   * Per-provider attempt records. Aggregated per provider name (booking
+   * platform or "Official hotel site") at the end of the run so the report can
+   * state, per provider, whether search worked, pages were accessible, prices
+   * were extracted and whether any price was verified.
+   */
+  const providerAttempts = new Map<
+    string,
+    ProviderDiagnostic & { offersFound: number }
+  >();
+
+  function noteAttempt(
+    hostname: string | null,
+    patch: {
+      searchOk?: boolean;
+      accessible?: boolean;
+      extracted?: boolean;
+      priceVerified?: boolean;
+      failureReason?: string | null;
+      offersFound?: number;
+    },
+  ) {
+    const name = hostname ? (providerForHostname(hostname) ?? "Official hotel site") : "Unknown source";
+    const attempt = providerAttempts.get(name) ?? {
+      id: name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+      name,
+      hostname,
+      query: "",
+      searchOk: false,
+      searchable: false,
+      accessible: false,
+      extracted: false,
+      priceVerified: false,
+      failureReason: null,
+      pageCount: 0,
+      queryCount: 0,
+      offersFound: 0,
+    };
+    if (patch.searchOk) attempt.searchOk = true;
+    if (patch.accessible) attempt.accessible = true;
+    if (patch.extracted) attempt.extracted = true;
+    if (patch.priceVerified) attempt.priceVerified = true;
+    if (patch.offersFound) attempt.offersFound += patch.offersFound;
+    // First blocking reason sticks; later successes clear it.
+    if (patch.failureReason && attempt.failureReason === null) attempt.failureReason = patch.failureReason;
+    else if (!patch.failureReason && attempt.failureReason && (patch.extracted || patch.priceVerified)) {
+      attempt.failureReason = null;
+    }
+    providerAttempts.set(name, attempt);
+  }
+
   const queries = generateQueries(params.parsed, budget.maxQueries);
 
   await params.hooks?.onStage?.("discover");
@@ -96,6 +150,9 @@ export async function runResearch(params: {
       queriesRun += 1;
       for (const result of results) {
         rawResults.push(result);
+        // The search layer reached the engine — record which booking
+        // platforms surfaced pages in this query.
+        noteAttempt(hostOf(result.url), { searchOk: true });
         if (rawResults.length >= budget.maxPages) break;
       }
     } catch (error) {
@@ -131,6 +188,26 @@ export async function runResearch(params: {
   // Log extraction failures as unavailable sources.
   for (const failure of extraction.failedUrls) {
     unavailable.push(`extract:${failure.url} (${failure.reason})`);
+    // A blocked fetch is an accessibility failure; a parse/no-price failure
+    // means the page was reachable but no usable hotel price came out.
+    const blocked = /^(blocked_url|blocked_ip|timeout|dns_failed|connect_failed|network_error|ssl_error|too_many_redirects|access_blocked)$/.test(failure.reason);
+    noteAttempt(hostOf(failure.url), {
+      searchOk: blocked ? true : false,
+      accessible: blocked ? false : true,
+      failureReason: failure.reason,
+    });
+  }
+
+  // Successful extractions: record per provider, including whether the price
+  // was verified (structured/JSON-LD data) or merely observed.
+  for (const offer of extraction.extractedOffers) {
+    noteAttempt(hostOf(offer.url), {
+      searchOk: true,
+      accessible: true,
+      extracted: true,
+      priceVerified: offer.priceStatus === "verified",
+      offersFound: 1,
+    });
   }
 
   await params.hooks?.onStage?.("check");
@@ -167,6 +244,40 @@ export async function runResearch(params: {
 
   const sourcesChecked = new Set<string>();
   for (const offer of matched) sourcesChecked.add(offer.providerName);
+
+  /** Hostname of a URL, or null when unparseable. */
+  function hostOf(url: string | undefined): string | null {
+    if (!url) return null;
+    try {
+      return new URL(url).hostname;
+    } catch {
+      return null;
+    }
+  }
+
+  // Aggregate per-provider attempts: a provider is "searchable" when any
+  // engine query surfaced one of its pages, and the record carries the final
+  // verified/extracted state. Only providers whose offers survived
+  // normalization + dedupe are marked ok.
+  const verifiedProviders = new Set(matched.filter((o) => o.priceStatus === "verified").map((o) => o.providerName));
+  const comparableProviders = new Set(matched.map((o) => o.providerName));
+  const providerDiagnostics: ProviderDiagnostic[] = Array.from(providerAttempts.values()).map(
+    (attempt) => {
+      // `offersFound` stays engine-internal: the published diagnostic carries
+      // `pageCount`/`queryCount` only, matching the ProviderDiagnostic shape.
+      const { offersFound: _offersFound, ...rest } = attempt;
+      const ok = comparableProviders.has(attempt.name);
+      return {
+        ...rest,
+        searchable: attempt.searchOk,
+        queryCount: queriesRun,
+        ok,
+        failureReason:
+          attempt.failureReason ??
+          (ok ? null : verifiedProviders.size > 0 ? "No comparable offer survived normalization." : "No usable price found.")
+      };
+    },
+  );
   if (sourcesChecked.size === 0) {
     limitations.push(
       params.provider.live
@@ -191,6 +302,12 @@ export async function runResearch(params: {
   console.log(
     `[research] provider=${params.provider.name} queries=${queriesRun} sources=${rawResults.length} offers=${matched.length} verified=${offersVerified} unavailable=${unavailable.length} durationMs=${durationMs}`,
   );
+  // Secret-free per-provider summary: state flags and counts only.
+  for (const d of providerDiagnostics) {
+    console.log(
+      `[provider-report] ${d.name} searchOk=${d.searchOk} accessible=${d.accessible} extracted=${d.extracted} priceVerified=${d.priceVerified} pageCount=${d.pageCount} reason=${d.failureReason ?? "ok"}`,
+    );
+  }
 
   return {
     offers: matched,
@@ -200,6 +317,7 @@ export async function runResearch(params: {
       unavailable,
       limitations,
       checkedAt,
+      providerDiagnostics,
     },
     metrics: {
       sourcesFound: new Set(rawResults.map((r) => r.source)).size,

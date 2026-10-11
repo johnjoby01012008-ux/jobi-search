@@ -61,7 +61,8 @@ export const runExtraction = internalAction({
       check_out: args.parsed.checkOut,
       guests: args.parsed.guests,
       rooms: args.parsed.rooms,
-      timeout_seconds: Math.round(config.timeoutMs / 1000),
+      // Clamp to the backend's 5–60 s schema window (see extractStage.ts).
+      timeout_seconds: Math.min(60, Math.max(5, Math.round(config.timeoutMs / 1000))),
     };
 
     const startedAt = Date.now();

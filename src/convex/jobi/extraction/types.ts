@@ -95,6 +95,12 @@ export interface ExtractionBackendConfig {
   timeoutMs: number;
   maxUrlsPerBatch: number;
   enabled: boolean;
+  /**
+   * Shared server-side secret sent as `X-Jobi-Token` (JOBI_EDGE_TOKEN).
+   * Required by the deployed edge; unset in local development. Never exposed
+   * to the browser.
+   */
+  authToken?: string;
 }
 
 /**

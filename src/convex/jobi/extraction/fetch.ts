@@ -41,6 +41,7 @@ export function resolveExtractionBackendConfig(
         DEFAULT_MAX_URLS_PER_BATCH,
       ),
       enabled: true,
+      ...(env.JOBI_EDGE_TOKEN?.trim() ? { authToken: env.JOBI_EDGE_TOKEN.trim() } : {}),
     };
   } catch {
     return null;
@@ -79,6 +80,7 @@ export async function extractBatch(
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json",
+        ...(config.authToken ? { "X-Jobi-Token": config.authToken } : {}),
       },
       body: JSON.stringify(request),
       signal: controller.signal,

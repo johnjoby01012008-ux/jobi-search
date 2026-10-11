@@ -19,6 +19,13 @@ export interface SearXNGConfig {
   maxResults?: number;
   categories?: string;
   engines?: string[];
+  /**
+   * Shared server-side secret sent as `X-Jobi-Token` on every request.
+   * Required by the deployed edge (Render single-service proxy); unset in
+   * local development where SearXNG is reached directly. Never exposed to
+   * the browser — only read from Convex env.
+   */
+  authToken?: string;
   fetchImpl?: (input: string, init?: RequestInit) => Promise<Response>;
   logger?: (event: Record<string, unknown>) => void;
 }
@@ -105,7 +112,12 @@ export class SearXNGClient {
         url.searchParams.set("engines", this.config.engines.join(","));
       }
 
-      const response = await fetchImpl(url.toString(), { signal: controller.signal });
+      const response = await fetchImpl(url.toString(), {
+        signal: controller.signal,
+        ...(this.config.authToken
+          ? { headers: { "X-Jobi-Token": this.config.authToken } }
+          : {}),
+      });
       if (!response.ok) {
         throw new SearchUnavailableError(`Search returned HTTP ${response.status}`);
       }
@@ -222,6 +234,7 @@ export function resolveSearXNGConfig(
     if (engines.length) config.engines = engines;
   }
   if (env.SEARXNG_CATEGORIES?.trim()) config.categories = env.SEARXNG_CATEGORIES.trim();
+  if (env.JOBI_EDGE_TOKEN?.trim()) config.authToken = env.JOBI_EDGE_TOKEN.trim();
   return config;
 }
 
@@ -292,6 +305,7 @@ export async function searchWeb(
       maxResults: resolved.maxResults,
       engines: resolved.engines,
       categories: resolved.categories,
+      authToken: resolved.authToken,
     });
   }
 

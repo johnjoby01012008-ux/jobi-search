@@ -176,6 +176,43 @@ function safeHost(url: string): string {
   }
 }
 
+/**
+ * Warm up potentially sleeping edge services before research starts.
+ *
+ * Free-tier hosts (e.g. Render) spin down after idle and take ~60 s to wake;
+ * waiting here keeps that cost out of the query loop, and both services are
+ * woken in parallel. Any response (including 404/503) means the instance is
+ * up; failures are ignored so the engine can report search failures honestly
+ * through its normal paths instead of failing the whole run here.
+ */
+async function wakeEdgeServices(
+  env: Record<string, string | undefined>,
+): Promise<void> {
+  const origins = new Set<string>();
+  for (const key of ["SEARXNG_URL", "BACKEND_EXTRACTOR_URL"] as const) {
+    const raw = env[key]?.trim();
+    if (!raw) continue;
+    try {
+      origins.add(new URL(raw).origin);
+    } catch {
+      // Ignore malformed URLs here; the engine surfaces real failures later.
+    }
+  }
+  await Promise.all(
+    Array.from(origins).map(async (origin) => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 75_000);
+      try {
+        await fetch(`${origin}/render-health`, { signal: controller.signal });
+      } catch {
+        // Cold start in progress or service down — research continues.
+      } finally {
+        clearTimeout(timer);
+      }
+    }),
+  );
+}
+
 /** The deep-search entry point. Scheduled right after a payment is verified. */
 export const runSearch = internalAction({
   args: { searchId: v.id("searches") },
@@ -210,6 +247,12 @@ export const runSearch = internalAction({
       : new CachedResearchProvider(provider, sharedCache, {
           ttlSeconds: searchCacheTtlSeconds(process.env),
         });
+
+    // Absorb the free-tier cold start (~60 s) once per idle period, before
+    // the research time budget starts. No-op when no live services exist.
+    if (!demoMode) {
+      await wakeEdgeServices(process.env);
+    }
 
     try {
       const result = await runResearch({

@@ -1,0 +1,24 @@
+# Render Blueprint — Jobi edge (single Free web service, ₹0).
+#
+# Option A (recommended): create the service from this Blueprint so the token
+# is prompted interactively and never stored in the repo.
+# Option B: follow the manual dashboard steps in docs/RENDER.md.
+#
+# Free-tier facts (docs.render.com/docs/free): 750 instance-hours per
+# workspace per calendar month shared across Free web services, 512 MB RAM /
+# 0.1 vCPU, sleeps after 15 min idle (sleeping consumes 0 hours), Dockerfile
+# builds supported, no payment card required.
+services:
+  - type: web
+    name: jobi-edge
+    runtime: docker
+    plan: free
+    dockerfilePath: ./render.Dockerfile
+    healthCheckPath: /render-health
+    envVars:
+      # Shared server-side secret (openssl rand -hex 32). Prompted at Blueprint
+      # creation; Render stores it as a secret env var — never sent to the
+      # browser, never committed. The Convex backend needs the SAME value
+      # (bunx convex env set JOBI_EDGE_TOKEN ...), set manually after deploy.
+      - key: JOBI_EDGE_TOKEN
+        sync: false

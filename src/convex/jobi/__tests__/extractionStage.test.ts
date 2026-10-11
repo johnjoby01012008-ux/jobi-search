@@ -71,6 +71,67 @@ function okBatchResponse() {
   );
 }
 
+describe("extraction batch transport", () => {
+  it("sends the shared edge token header when configured", async () => {
+    const { extractBatch } = await import("../extraction/fetch");
+    const fetchImpl = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ successful: [], failed: [], elapsed_seconds: 0 }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    await extractBatch(
+      {
+        baseUrl: "https://extractor.test",
+        timeoutMs: 1000,
+        maxUrlsPerBatch: 5,
+        enabled: true,
+        authToken: "edge-token-abc123",
+      },
+      {
+        urls: ["https://www.booking.com/hotel/x"],
+        check_in: "2026-12-12",
+        check_out: "2026-12-15",
+        guests: 2,
+        rooms: 1,
+        timeout_seconds: 15,
+      },
+      fetchImpl as unknown as (input: string, init?: RequestInit) => Promise<Response>,
+    );
+    const init = fetchImpl.mock.calls[0][1] as { headers: Record<string, string> };
+    expect(init.headers["X-Jobi-Token"]).toBe("edge-token-abc123");
+  });
+
+  it("omits the header entirely when no token is configured", async () => {
+    const { extractBatch } = await import("../extraction/fetch");
+    const fetchImpl = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ successful: [], failed: [], elapsed_seconds: 0 }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    await extractBatch(
+      {
+        baseUrl: "https://extractor.test",
+        timeoutMs: 1000,
+        maxUrlsPerBatch: 5,
+        enabled: true,
+      },
+      {
+        urls: ["https://www.booking.com/hotel/x"],
+        check_in: "2026-12-12",
+        check_out: "2026-12-15",
+        guests: 2,
+        rooms: 1,
+        timeout_seconds: 15,
+      },
+      fetchImpl as unknown as (input: string, init?: RequestInit) => Promise<Response>,
+    );
+    const init = fetchImpl.mock.calls[0][1] as { headers: Record<string, string> };
+    expect(init.headers["X-Jobi-Token"]).toBeUndefined();
+  });
+});
+
 describe("extraction stage merge", () => {
   it("merges verified extracted offers into the results", async () => {
     const fetchImpl = vi.fn().mockResolvedValue(okBatchResponse());

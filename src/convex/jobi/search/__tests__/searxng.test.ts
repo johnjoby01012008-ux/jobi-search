@@ -172,6 +172,34 @@ describe("searchWeb", () => {
       SearchUnavailableError,
     );
   });
+
+  it("sends the shared edge token header only when configured", async () => {
+    const calls: Array<{ url: string; headers: Record<string, string> }> = [];
+    const fetchImpl = async (input: string, init?: RequestInit): Promise<Response> => {
+      calls.push({
+        url: input,
+        headers: (init?.headers as Record<string, string>) ?? {},
+      });
+      return jsonResponse(SAMPLE_PAYLOAD);
+    };
+
+    const gated = new SearXNGClient({
+      baseUrl: "http://searxng:8080",
+      authToken: "edge-token-abc123",
+      fetchImpl,
+      logger: () => {},
+    });
+    await gated.search("goa hotels with token");
+    expect(calls[0].headers["X-Jobi-Token"]).toBe("edge-token-abc123");
+
+    const open = new SearXNGClient({
+      baseUrl: "http://searxng:8080",
+      fetchImpl,
+      logger: () => {},
+    });
+    await open.search("goa hotels without token");
+    expect(calls[1].headers["X-Jobi-Token"]).toBeUndefined();
+  });
 });
 
 describe("error handling", () => {

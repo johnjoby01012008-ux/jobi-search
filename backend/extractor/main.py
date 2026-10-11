@@ -14,13 +14,15 @@ from __future__ import annotations
 
 import asyncio
 import os
+import secrets
 import time
 import uuid
 from typing import Any
 from contextlib import asynccontextmanager
 
+import httpx
 from fastapi import FastAPI, HTTPException, Request, Query
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import ValidationError
 
 from .schemas import (
@@ -70,6 +72,35 @@ def _check_rate_limit(key: str) -> bool:
     window.append(now)
     _rate_limits[key] = window
     return True
+
+
+# ---------------------------------------------------------------------------
+# Edge access token (Render single-service deployment)
+# ---------------------------------------------------------------------------
+
+def _edge_token_ok(request: Request) -> bool:
+    """Shared-secret check for every externally useful endpoint.
+
+    When JOBI_EDGE_TOKEN is set (the Render edge), callers must present the
+    exact value in the X-Jobi-Token header. The Convex backend reads the same
+    server-side variable; the browser never sees it. When the variable is
+    unset (local development, bound to loopback), behaviour is unchanged.
+    """
+    required = os.environ.get("JOBI_EDGE_TOKEN", "").strip()
+    if not required:
+        return True
+    provided = request.headers.get("x-jobi-token", "")
+    return secrets.compare_digest(provided, required)
+
+
+def _require_edge_token(request: Request) -> None:
+    if not _edge_token_ok(request):
+        raise HTTPException(status_code=403, detail="forbidden")
+
+
+def _searxng_internal_url() -> str:
+    """Co-located SearXNG base URL (loopback inside the single container)."""
+    return os.environ.get("SEARXNG_INTERNAL_URL", "http://127.0.0.1:8080").rstrip("/")
 
 
 # ---------------------------------------------------------------------------
@@ -123,12 +154,69 @@ async def health():
     }
 
 
+@app.get("/render-health")
+async def render_health():
+    """Composite liveness for the Render edge (healthCheckPath).
+
+    Verifies BOTH processes of the single service: this FastAPI app answers
+    (trivially true while handling the request) and the co-located SearXNG
+    responds over loopback. Any HTTP response from SearXNG counts as alive —
+    liveness, not feature status. Deliberately returns no internal details.
+    """
+    searxng_reachable = False
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            await client.get(f"{_searxng_internal_url()}/healthz")
+            searxng_reachable = True
+    except httpx.HTTPError:
+        searxng_reachable = False
+
+    if not searxng_reachable:
+        return JSONResponse(
+            status_code=503,
+            content={"ok": False, "searxng_reachable": False},
+        )
+    return {"ok": True, "searxng_reachable": True}
+
+
+@app.get("/search")
+async def search_proxy(request: Request):
+    """Token-gated proxy to the co-located SearXNG JSON API.
+
+    This is the ONLY public search surface: SearXNG itself binds loopback
+    inside the container, so unauthenticated callers can reach nothing.
+    Keeps the existing SSRF/limiter posture: per-IP rate limit + shared token.
+    """
+    _require_edge_token(request)
+    if not _check_rate_limit(_client_key(request)):
+        raise HTTPException(status_code=429, detail="rate limited")
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=False) as client:
+            upstream = await client.get(
+                f"{_searxng_internal_url()}/search",
+                params=dict(request.query_params),
+            )
+    except httpx.HTTPError:
+        return JSONResponse(
+            status_code=502,
+            content={"ok": False, "error": "search_unavailable"},
+        )
+
+    return Response(
+        content=upstream.content,
+        status_code=upstream.status_code,
+        media_type=upstream.headers.get("content-type", "application/json"),
+    )
+
+
 # ---------------------------------------------------------------------------
 # URL validation endpoint
 # ---------------------------------------------------------------------------
 
 @app.post("/validate-url", response_model= dict[str, Any])
 async def validate_url(req: ValidateRequest, request: Request):
+    _require_edge_token(request)
     if not _check_rate_limit(_client_key(request)):
         raise HTTPException(status_code=429, detail="rate limited")
 
@@ -147,6 +235,7 @@ async def validate_url(req: ValidateRequest, request: Request):
 
 @app.post("/extract", response_model= ExtractResult)
 async def extract_one(req: ExtractRequest, request: Request):
+    _require_edge_token(request)
     if not _check_rate_limit(_client_key(request)):
         raise HTTPException(status_code=429, detail="rate limited")
 
@@ -212,6 +301,7 @@ async def extract_one(req: ExtractRequest, request: Request):
 
 @app.post("/extract-batch", response_model= ExtractBatchResult)
 async def extract_batch(req: ExtractBatchRequest, request: Request):
+    _require_edge_token(request)
     if not _check_rate_limit(_client_key(request)):
         raise HTTPException(status_code=429, detail="rate limited")
 

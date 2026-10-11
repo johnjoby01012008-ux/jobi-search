@@ -70,7 +70,9 @@ export async function runExtractionStage(
     check_out: parsed.checkOut,
     guests: parsed.guests,
     rooms: parsed.rooms,
-    timeout_seconds: Math.round(config.timeoutMs / 1000),
+    // The backend schema allows 5–60 s per URL; clamp so a generous
+    // EXTRACTION_TIMEOUT_MS can never produce a 422 from the service.
+    timeout_seconds: Math.min(60, Math.max(5, Math.round(config.timeoutMs / 1000))),
   };
 
   let batchResult: ExtractBatchResult;

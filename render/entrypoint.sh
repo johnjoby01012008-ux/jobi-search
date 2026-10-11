@@ -1,27 +1,28 @@
 #!/bin/sh
 # Jobi edge entrypoint — Render single-service architecture (₹0 free tier).
 #
-# The supervisor is a small Python standard-library process (render/supervisor.py)
-# that owns both children and the container lifecycle:
+# The supervisor (render/supervisor.py) owns both children and the container
+# lifecycle:
 #
-#   1. SearXNG (granian) -> 127.0.0.1:8080   (loopback only)
-#   2. uvicorn / FastAPI -> 0.0.0.0:$PORT    (token-gated edge)
+#   1. SearXNG (granian)  -> 127.0.0.1:8080   (loopback only)
+#   2. uvicorn / FastAPI  -> 0.0.0.0:$PORT    (token-gated edge)
 #
-# The supervisor starts SearXNG through the stock entrypoint, waits for its
-# real HTTP health endpoint, starts the extractor, waits for its /health, and
-# then continuously monitors both. If either exits, it terminates the other and
-# exits nonzero so Render restarts the container. Shutdown signals are
-# forwarded to both children.
+# This file:
+#   * exports the same defaults the supervisor reads, so the image hard-codes
+#     nothing Python-version-specific;
+#   * fails closed without JOBI_EDGE_TOKEN (a misconfigured deployment can
+#     never expose the extraction endpoints);
+#   * then `exec`s the supervisor as PID 1 (the supervisor owns both
+#     children, enforces startup ordering + health, and translates any child
+#     failure or shutdown signal into a clean exit).
 #
 # PYTHONPATH discipline is unchanged: the official searxng/searxng image does
 # not set PYTHONPATH, and granian runs from /usr/local/searxng/.venv where the
 # searx package is installed. The extractor runs in its own virtualenv at
-# /opt/extractor-env with a self-contained venv interpreter, so neither process
-# needs a global PYTHONPATH override. The supervisor only reads environment
-# variables (never logs the edge token).
+# /opt/extractor-env with a self-contained venv interpreter, so neither
+# process needs a global PYTHONPATH override. The supervisor only reads
+# environment variables (never logs the edge token).
 #
-# Fail-closed: without JOBI_EDGE_TOKEN the supervisor refuses to start, so a
-# misconfigured deployment can never expose the extraction endpoints.
 set -eu
 
 export PORT SEARXNG_INTERNAL_URL
@@ -45,4 +46,6 @@ esac
 export PORT="${PORT:-10000}"
 export SEARXNG_INTERNAL_URL="${SEARXNG_INTERNAL_URL:-http://127.0.0.1:8080}"
 
+# The supervisor becomes PID 1 and stays as the container's long-running
+# process. `exec` replaces this shell so signals land directly on it.
 exec /usr/bin/env python3 /usr/local/bin/jobi-supervisor.py

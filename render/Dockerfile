@@ -88,5 +88,7 @@ COPY --chown=searxng:searxng searxng/settings.yml /etc/searxng/settings.yml
 COPY --chown=searxng:searxng searxng/limiter.toml /etc/searxng/limiter.toml
 
 # The supervisor holds the container as PID 1. `sh` is the smallest, most
-# portable wrapper; it exports the same defaults the supervisor reads.
+# portable wrapper; it exports the same defaults the supervisor reads and then
+# `exec`s the supervisor, which owns both children and translates any child
+# failure or shutdown signal into a clean exit.
 ENTRYPOINT ["/bin/sh", "/usr/local/bin/jobi-edge-entrypoint.sh"]

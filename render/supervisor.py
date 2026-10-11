@@ -12,7 +12,7 @@ Long-running container process (PID 1) for the single-service edge image:
 
 The supervisor:
 
-  * starts the stock SearXNG entrypoint, then binds granian strictly to
+  * starts SearXNG through the stock entrypoint, binds granian strictly to
     127.0.0.1:8080;
   * waits for SearXNG's real HTTP health endpoint to answer before starting
     the extractor;
@@ -23,8 +23,10 @@ The supervisor:
     restarts the container;
   * forwards SIGTERM/SIGINT to both children and reaps them.
 
-Python standard library only. This must stay a dependency-free file so the
-container never needs a separate `python` interpreter package installed.
+Python standard-library process management only. This file ships as
+`/usr/local/bin/jobi-supervisor.py` and is the container's main process; the
+shell wrapper only hard-codes the two defaults the supervisor itself reads and
+then `exec`s it.
 """
 
 from __future__ import annotations
@@ -38,7 +40,7 @@ import urllib.error
 import urllib.request
 
 # ---------------------------------------------------------------------------
-# Config (all optional; the Dockerfile sets the same defaults when unset).
+# Config (the Dockerfile sets the same defaults when the variables are unset).
 # ---------------------------------------------------------------------------
 
 PORT = os.environ.get("PORT", "10000").strip() or "10000"
@@ -46,7 +48,8 @@ SEARXNG_INTERNAL_URL = os.environ.get(
     "SEARXNG_INTERNAL_URL", "http://127.0.0.1:8080"
 ).rstrip("/")
 
-# Official searxng/searxng image ships this entrypoint in the image itself.
+# Official searxng/searxng image ships this entrypoint inside the image
+# itself (not in the repository).
 SEARXNG_ENTRYPOINT = "/usr/local/searxng/entrypoint.sh"
 
 # Extractor virtualenv shipped by render.Dockerfile.
@@ -57,6 +60,11 @@ EXTRACTOR_APP = "extractor.main:app"
 # process. Total budget in seconds.
 SEARXNG_START_TIMEOUT = 30
 EXTRACTOR_START_TIMEOUT = 60
+
+# Failure loop: after a graceful stop, wait at most this long for children to
+# finish, then escalate to SIGKILL.
+STOP_TIMEOUT = 10
+KILL_TIMEOUT = 5
 
 # Health probes against the two services.
 SEARXNG_HEALTH_PATH = "/healthz"
@@ -109,10 +117,15 @@ def _http_get(url: str, timeout: float) -> int:
 
 
 def _wait_for_http_health(url: str, timeout: float, label: str) -> bool:
+    """Poll until a 2xx/3xx response, returning False on a hard timeout.
+
+    Unsuccessful HTTP status codes are treated as failures here: a 503 from
+    SearXNG or the extractor must stop startup, not count as healthy.
+    """
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         status = _http_get(url, timeout=2.0)
-        if status >= 200 and status < 400:
+        if 200 <= status < 400:
             _log("health_ok", label, "HTTP", status, url)
             return True
         _log("health_wait", label, "HTTP", status, "retry in 1s")
@@ -131,13 +144,12 @@ def _terminate(descriptor: str, process: subprocess.Popen[str], timeout: float) 
         _log("termination_force", descriptor, "pid", process.pid)
         try:
             process.kill()
-            process.wait(timeout=5)
+            process.wait(timeout=KILL_TIMEOUT)
         except Exception:
             pass
 
 
 def _forward_signals(
-    supervisor: object,
     searxng: subprocess.Popen[str],
     extractor: subprocess.Popen[str],
 ) -> None:
@@ -145,8 +157,8 @@ def _forward_signals(
 
     def _handle(signum: int, frame: object) -> None:
         _log("signal", "received", signum, "shutting_down")
-        _terminate("searxng", searxng, timeout=10)
-        _terminate("extractor", extractor, timeout=10)
+        _terminate("searxng", searxng, timeout=STOP_TIMEOUT)
+        _terminate("extractor", extractor, timeout=STOP_TIMEOUT)
         try:
             os.kill(os.getpid(), signum)
         except Exception:
@@ -157,7 +169,7 @@ def _forward_signals(
 
 
 def _run_child(
-    argv: list[str], env: dict[str, str], check: bool
+    argv: list[str], env: dict[str, str]
 ) -> subprocess.Popen[str]:
     return subprocess.Popen(
         argv,
@@ -171,7 +183,7 @@ def _run_child(
 def _read_child_output(
     descriptor: str, process: subprocess.Popen[str], deadline: float
 ) -> None:
-    """Consume the child's stdout line-by-line until exit or timeout."""
+    """Consume the child's stdout line-by-line until exit or deadline."""
     if process.stdout is None:
         return
     while time.monotonic() < deadline:
@@ -207,32 +219,28 @@ def main() -> int:
         )
         return 1
 
-    env = dict(os.environ)
-
-    # Preconfigure the env for each child. SearXNG's stock entrypoint reads
-    # GRANIAN_HOST/GRANIAN_PORT and the app reads SEARXNG_INTERNAL_URL; the
-    # extractor reads PORT and SEARXNG_INTERNAL_URL.
-    searxng_env = dict(env)
+    # Preconfigure the environment for each child. SearXNG's stock entrypoint
+    # reads GRANIAN_HOST/GRANIAN_PORT and the app reads SEARXNG_INTERNAL_URL;
+    # the extractor reads PORT and SEARXNG_INTERNAL_URL.
+    searxng_env = dict(os.environ)
     searxng_env["GRANIAN_HOST"] = "127.0.0.1"
     searxng_env["GRANIAN_PORT"] = "8080"
     searxng_env["SEARXNG_INTERNAL_URL"] = SEARXNG_INTERNAL_URL
 
-    extractor_env = dict(env)
+    extractor_env = dict(os.environ)
     extractor_env["PORT"] = PORT
     extractor_env["SEARXNG_INTERNAL_URL"] = SEARXNG_INTERNAL_URL
 
-    # Run the supervisor with PATH and the extractor venv bin first so it can
-    # locate `env python3` and the uvicorn binary reliably.
-    supervisor_env = dict(env)
-    supervisor_env["PATH"] = "/opt/extractor-env/bin:" + supervisor_env.get("PATH", "")
-
-    # Start SearXNG first. Its own stock entrypoint becomes the child; the
-    # supervisor keeps the parent shell as PID 1, so the container stays live.
-    searxng = _run_child([SEARXNG_ENTRYPOINT], searxng_env, check=False)
+    # Start SearXNG first through the stock entrypoint (granian as its child).
+    # It is already looping on loopback, so the supervisor does not need to
+    # start granian itself.
+    searxng = _run_child(
+        [SEARXNG_ENTRYPOINT, "granian"], searxng_env, check=False
+    )
     _log("started", "searxng", "pid", searxng.pid)
 
     # Wait for SearXNG's real HTTP health endpoint. This blocks the extractor
-    # from starting (and therefore blocks inbound traffic) until SearXNG is
+    # from starting (and therefore blocks inbound requests) until SearXNG is
     # actually serving. This cannot deadlock: SearXNG is already running.
     if not _wait_for_http_health(
         "{}/{}".format(SEARXNG_INTERNAL_URL, SEARXNG_HEALTH_PATH),
@@ -245,7 +253,7 @@ def main() -> int:
             "http",
             "{}/{}".format(SEARXNG_INTERNAL_URL, SEARXNG_HEALTH_PATH),
         )
-        _terminate("searxng", searxng, timeout=10)
+        _terminate("searxng", searxng, timeout=STOP_TIMEOUT)
         return 1
 
     # Start the extractor now that SearXNG is confirmed alive.
@@ -256,8 +264,9 @@ def main() -> int:
     )
     _log("started", "extractor", "pid", extractor.pid)
 
-    # Wait for the extractor's /health endpoint. Non-2xx/3xx responses are
-    # failures: a 503 from the extractor must stop startup, not count as up.
+    # Wait for the extractor's /health endpoint. A 503 or any non-2xx/3xx is a
+    # failure: it means the extractor started but reports it is not ready, and
+    # the container must exit nonzero so Render restarts it.
     if not _wait_for_http_health(
         "http://127.0.0.1:{}/health".format(PORT),
         timeout=EXTRACTOR_START_TIMEOUT,
@@ -269,34 +278,35 @@ def main() -> int:
             "http",
             "http://127.0.0.1:{}/health".format(PORT),
         )
-        _terminate("searxng", searxng, timeout=10)
-        _terminate("extractor", extractor, timeout=10)
+        _terminate("searxng", searxng, timeout=STOP_TIMEOUT)
+        _terminate("extractor", extractor, timeout=STOP_TIMEOUT)
         return 1
 
     _log("healthy", "both services up")
 
-    # After startup, keep watching both children. If either dies, kill the
-    # other and exit nonzero so the container platform restarts the service.
-    _forward_signals(None, searxng, extractor)
+    # After startup, keep watching both children in a bounded loop. If either
+    # dies, terminate the other and exit nonzero so the container platform
+    # restarts the service.
+    _forward_signals(searxng, extractor)
     deadline = time.monotonic() + 300
     while time.monotonic() < deadline:
         poll = searxng.poll()
         if poll is not None:
             _log("fatal", "SearXNG exited", "code", poll)
-            _terminate("extractor", extractor, timeout=10)
+            _terminate("extractor", extractor, timeout=STOP_TIMEOUT)
             return 1
         poll = extractor.poll()
         if poll is not None:
             _log("fatal", "extractor exited", "code", poll)
-            _terminate("searxng", searxng, timeout=10)
+            _terminate("searxng", searxng, timeout=STOP_TIMEOUT)
             return 1
         time.sleep(0.25)
         _read_child_output("searxng", searxng, deadline)
         _read_child_output("extractor", extractor, deadline)
 
     _log("fatal", "supervisor watchdog expired")
-    _terminate("searxng", searxng, timeout=10)
-    _terminate("extractor", extractor, timeout=10)
+    _terminate("searxng", searxng, timeout=STOP_TIMEOUT)
+    _terminate("extractor", extractor, timeout=STOP_TIMEOUT)
     return 1
 
 

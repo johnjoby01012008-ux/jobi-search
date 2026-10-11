@@ -101,4 +101,7 @@ ENV GRANIAN_HOST="127.0.0.1" \
 COPY --chown=searxng:searxng searxng/settings.yml /etc/searxng/settings.yml
 COPY --chown=searxng:searxng searxng/limiter.toml /etc/searxng/limiter.toml
 
-ENTRYPOINT ["/usr/local/bin/jobi-edge-entrypoint.sh"]
+# The supervisor holds the container as PID 1. `sh` is the smallest, most
+# portable wrapper; it exports the same defaults the supervisor reads.
+ENTRYPOINT ["/bin/sh", "/usr/local/bin/jobi-edge-entrypoint.sh"]
+

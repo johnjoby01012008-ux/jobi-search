@@ -63,6 +63,8 @@ RUN set -eux; \
     rm -f /tmp/extractor-requirements.txt /tmp/get-pip.py
 
 # --- Application code ------------------------------------------------------
+# Copy the supervisor (readable by the runtime user) and the shell entrypoint
+# that exports the same defaults and then execs the supervisor.
 COPY render/supervisor.py /usr/local/bin/jobi-supervisor.py
 COPY render/entrypoint.sh /usr/local/bin/jobi-edge-entrypoint.sh
 RUN chmod +x /usr/local/bin/jobi-supervisor.py /usr/local/bin/jobi-edge-entrypoint.sh

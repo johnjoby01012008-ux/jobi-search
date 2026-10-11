@@ -23,10 +23,14 @@ The supervisor:
     restarts the container;
   * forwards SIGTERM/SIGINT to both children and reaps them.
 
-Python standard-library process management only. This file ships as
-`/usr/local/bin/jobi-supervisor.py` and is the container's main process; the
-shell wrapper only hard-codes the two defaults the supervisor itself reads and
-then `exec`s it.
+Python standard-library process management only. Child stdout/stderr is
+redirected straight to the container's log (the same file descriptors Docker
+already captures), so no blocking `readline()` is used and the supervisor
+keeps polling both children regardless of any child output.
+
+This file ships as `/usr/local/bin/jobi-supervisor.py` and is the
+container's main process; the shell wrapper only hard-codes the two defaults
+the supervisor reads and then `exec`s it.
 """
 
 from __future__ import annotations
@@ -168,34 +172,21 @@ def _forward_signals(
     signal.signal(signal.SIGINT, _handle)
 
 
-def _run_child(
-    argv: list[str], env: dict[str, str]
-) -> subprocess.Popen[str]:
+def _run_child(argv: list[str], env: dict[str, str]) -> subprocess.Popen[str]:
+    """Spawn one child with its output directly on the container's log.
+
+    stdout/stderr are inherited (subprocess.DEVNULL is intentionally NOT used),
+    so Docker captures everything and the supervisor never blocks on a pipe
+    buffer that a chatty child could fill. No `check=` argument is accepted or
+    needed: Popen itself does not take `check`.
+    """
     return subprocess.Popen(
         argv,
         env=env,
-        stdout=subprocess.PIPE,
+        stdout=subprocess.DEVNULL,
         stderr=subprocess.STDOUT,
         text=True,
     )
-
-
-def _read_child_output(
-    descriptor: str, process: subprocess.Popen[str], deadline: float
-) -> None:
-    """Consume the child's stdout line-by-line until exit or deadline."""
-    if process.stdout is None:
-        return
-    while time.monotonic() < deadline:
-        line = process.stdout.readline()
-        if not line:
-            if process.poll() is not None:
-                break
-            time.sleep(0.1)
-            continue
-        trimmed = line.strip()
-        if trimmed:
-            _log("child", descriptor, "pid", process.pid, trimmed)
 
 
 def main() -> int:
@@ -235,7 +226,7 @@ def main() -> int:
     # It is already looping on loopback, so the supervisor does not need to
     # start granian itself.
     searxng = _run_child(
-        [SEARXNG_ENTRYPOINT, "granian"], searxng_env, check=False
+        [SEARXNG_ENTRYPOINT, "granian"], searxng_env
     )
     _log("started", "searxng", "pid", searxng.pid)
 
@@ -260,7 +251,6 @@ def main() -> int:
     extractor = _run_child(
         [EXTRACTOR_UVICORN, EXTRACTOR_APP, "--host", "0.0.0.0", "--port", PORT],
         extractor_env,
-        check=False,
     )
     _log("started", "extractor", "pid", extractor.pid)
 
@@ -284,12 +274,11 @@ def main() -> int:
 
     _log("healthy", "both services up")
 
-    # After startup, keep watching both children in a bounded loop. If either
-    # dies, terminate the other and exit nonzero so the container platform
-    # restarts the service.
+    # After startup, keep watching both children in an unbounded loop. Both
+    # children must stay alive for the container to stay healthy. A dead
+    # child -> terminate the other -> exit nonzero so the platform restarts.
     _forward_signals(searxng, extractor)
-    deadline = time.monotonic() + 300
-    while time.monotonic() < deadline:
+    while True:
         poll = searxng.poll()
         if poll is not None:
             _log("fatal", "SearXNG exited", "code", poll)
@@ -301,13 +290,6 @@ def main() -> int:
             _terminate("searxng", searxng, timeout=STOP_TIMEOUT)
             return 1
         time.sleep(0.25)
-        _read_child_output("searxng", searxng, deadline)
-        _read_child_output("extractor", extractor, deadline)
-
-    _log("fatal", "supervisor watchdog expired")
-    _terminate("searxng", searxng, timeout=STOP_TIMEOUT)
-    _terminate("extractor", extractor, timeout=STOP_TIMEOUT)
-    return 1
 
 
 if __name__ == "__main__":

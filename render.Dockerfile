@@ -12,19 +12,25 @@
 #
 # CRITICAL: we do NOT touch the SearXNG virtualenv, PYTHONPATH, or
 # entrypoint. The stock image starts SearXNG through:
-#   /usr/local/searxng/docker/entrypoint.sh  ->  granian searx.webapp:app
+#   /usr/local/searxng/entrypoint.sh  ->  granian searx.webapp:app
 # and sets PYTHONPATH to include the SearXNG source tree + its venv
 # site-packages. Any override of PYTHONPATH breaks `import searx`.
 #
 # Instead:
-#  - Extractor deps are installed into an isolated /opt/extractor-libs.
-#  - The entrypoint starts uvicorn with `-p /opt/extractor-libs` and its
-#    own PYTHONPATH, so the extractor never touches the SearXNG env.
-#  - SearXNG is started LAST through the ORIGINAL entrypoint as PID 1.
+#   - Extractor deps are installed into an isolated /opt/extractor-libs.
+#   - The entrypoint starts uvicorn with `-p /opt/extractor-libs` and its
+#     own PYTHONPATH, so the extractor never touches the SearXNG env.
+#   - SearXNG is started LAST through the ORIGINAL entrypoint as PID 1.
 #
 # Build context: repository root.
 #   Render dashboard: Dockerfile Path = render.Dockerfile
 #   or render.yaml (this repo) which sets it for you.
+#
+# Python for the extractor is installed into an isolated target dir
+# (/opt/extractor-libs) by the Dockerfile below, using the SearXNG image's
+# own Python (via --target pip --target). We deliberately do not bake
+# uvicorn into the official searxng/.venv; that venv is owned by the image's
+# own packaging and mutating it can break `import searx`.
 # -------------------------------------------------------------------
 
 FROM docker.io/searxng/searxng:latest
@@ -67,6 +73,80 @@ EXPOSE 8080 10000
 # does NOT relabel GRANIAN_HOST, so we override GRANIAN_HOST ourselves.
 ENV GRANIAN_HOST="127.0.0.1" \
     SEARXNG_INTERNAL_URL="http://127.0.0.1:8080"
+
+# Locate the extractor's uvicorn with the same PATH semantics as
+# `command -v uvicorn` on a host with the extractor environment. Using its
+# absolute path in the image (and exporting EXTRACTOR_PY_PREFIX for the
+# uvicorn command) guarantees the extractor never falls back to the official
+# SearXNG venv, which deliberately does not contain fastapi/uvicorn/httpx.
+RUN if ! command -v uvicorn >/dev/null 2>&1; then \
+      echo "FATAL: extractor uvicorn not found in ${EXTRACTOR_PY_PREFIX}/bin" >&2; \
+      exit 1; \
+    fi
+
+# The extractor must resolve uvicorn+FastAPI from its own isolated pip
+# target (/opt/extractor-libs), NOT from the official SearXNG venv, which
+# does not contain those packages in this image. We deliberately do not
+# install uvicorn into the SearXNG venv: doing so would mutate the official
+# image's Python environment and risk layout/permission mismatches. If the
+# configured extractor uvicorn is missing, the entrypoint refuses to start
+# with a clear, self-diagnosing failure instead of getting as far as
+# granian and pid-1 teardown.
+
+# The extractor must resolve uvicorn+FastAPI from its own isolated pip
+# target (/opt/extractor-libs), NOT from the official SearXNG venv, which
+# does not contain those packages in this image. We deliberately do not
+# install uvicorn into the SearXNG venv: doing so would mutate the official
+# image's Python environment and risk layout/permission mismatches. If the
+# configured extractor uvicorn is missing, the entrypoint refuses to start
+# with a clear, self-diagnosing failure instead of getting as far as
+# granian and pid-1 teardown.
+
+
+# The extractor must resolve uvicorn+FastAPI from its own isolated pip
+# target (/opt/extractor-libs), NOT from the official SearXNG venv, which
+# does not contain those packages in this image. We deliberately do not
+# install uvicorn into the SearXNG venv: doing so would mutate the official
+# image's Python environment and risk layout/permission mismatches. If the
+# configured extractor uvicorn is missing, the entrypoint refuses to start
+# with a clear, self-diagnosing failure instead of getting as far as
+# granian and pid-1 teardown.
+
+      echo "FATAL: extractor uvicorn not found in ${EXTRACTOR_PY_PREFIX}/bin" >&2; \
+      exit 1; \
+    fi
+
+# The extractor must resolve uvicorn+FastAPI from its own isolated pip
+# target (/opt/extractor-libs), NOT from the official SearXNG venv, which
+# does not contain those packages in this image. We deliberately do not
+# install uvicorn into the SearXNG venv: doing so would mutate the official
+# image's Python environment and risk layout/permission mismatches. If the
+# configured extractor uvicorn is missing, the entrypoint refuses to start
+# with a clear, self-diagnosing failure instead of getting as far as
+# granian and pid-1 teardown.
+
+      echo "FATAL: extractor uvicorn not found in ${EXTRACTOR_PY_PREFIX}/bin" >&2; \
+      exit 1; \
+    fi
+
+# The extractor must resolve uvicorn+FastAPI from its own isolated pip
+# target (/opt/extractor-libs), NOT from the official SearXNG venv, which
+# does not contain those packages in this image. We deliberately do not
+# install uvicorn into the SearXNG venv: doing so would mutate the official
+# image's Python environment and risk layout/permission mismatches. If the
+# configured extractor uvicorn is missing, the entrypoint refuses to start
+# with a clear, self-diagnosing failure instead of getting as far as
+# granian and pid-1 teardown.
+
+
+# The extractor must resolve uvicorn+FastAPI from its own isolated pip
+# target (/opt/extractor-libs), NOT from the official SearXNG venv, which
+# does not contain those packages in this image. We deliberately do not
+# install uvicorn into the SearXNG venv: doing so would mutate the official
+# image's Python environment and risk layout/permission mismatches. If the
+# configured extractor uvicorn is missing, the entrypoint refuses to start
+# with a clear, self-diagnosing failure instead of getting as far as
+# granian and pid-1 teardown.
 
 # SearXNG settings (JSON output enabled, limiter off) are baked by copying
 # the tuned files into the path the stock image expects.

@@ -221,6 +221,7 @@ async def extract_batch(req: ExtractBatchRequest, request: Request):
             detail=f"Too many URLs: {len(req.urls)} > {MAX_URLS_PER_BATCH}",
         )
 
+    start = time.time()
     successful: list[ExtractResult] = []
     failed: list[dict[str, Any]] = []
     pool = getattr(app.state, "playwright_pool", None)
@@ -297,7 +298,7 @@ async def extract_batch(req: ExtractBatchRequest, request: Request):
     return ExtractBatchResult(
         successful=successful,
         failed=failed,
-        elapsed_seconds=round(time.time() - start, 3) if False else 0.0,
+        elapsed_seconds=round(time.time() - start, 3),
     )
 
 

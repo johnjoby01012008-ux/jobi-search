@@ -118,8 +118,10 @@ def extract_from_page(
         "amenities": jsonld_primary.get("amenities", []) or html_data.get("amenities", []),
         "description": jsonld_primary.get("description") or html_data.get("description"),
         "breakfast_included": jsonld_primary.get("breakfast_included") if jsonld_primary.get("breakfast_included") is not None else html_data.get("breakfast_included"),
-        "cancellation_text": jsonld_primary.get("availability") or html_data.get("cancellation_text"),
-        "free_cancellation": jsonld_primary.get("availability") if jsonld_primary.get("availability") == "available" else html_data.get("free_cancellation"),
+        # JSON-LD carries availability, not cancellation terms — keep the
+        # cancellation fields sourced from the HTML parser only.
+        "cancellation_text": html_data.get("cancellation_text"),
+        "free_cancellation": html_data.get("free_cancellation"),
         "availability": jsonld_primary.get("availability") or html_data.get("availability"),
     }
 

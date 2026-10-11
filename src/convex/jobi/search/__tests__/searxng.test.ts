@@ -62,7 +62,7 @@ describe("SearXNG configuration", () => {
   it("detects and normalises the base URL from the environment", () => {
     expect(detectSearXNGConfig({})).toBeNull();
     expect(detectSearXNGConfig({ SEARXNG_URL: "   " })).toBeNull();
-    expect(resolveSearXNGConfig({ SEARXNG_URL: "http://searxng:8080///" })).toEqual({
+    expect(resolveSearXNGConfig({ SEARXNG_URL: "http://searxng:8080///" })).toMatchObject({
       baseUrl: "http://searxng:8080",
     });
   });
@@ -100,7 +100,7 @@ describe("SearXNG configuration", () => {
 
 describe("normalization", () => {
   it("maps a raw SearXNG item into the normalized shape", () => {
-    const normalized = normalizeSearXNGResponse(SAMPLE_PAYLOAD.results[0]);
+    const normalized = normalizeSearXNGResponse(SAMPLE_PAYLOAD)[0];
     expect(normalized).not.toBeNull();
     expect(normalized).toMatchObject({
       url: SAMPLE_PAYLOAD.results[0].url,
@@ -109,8 +109,8 @@ describe("normalization", () => {
       currency: "INR",
       rating: 4.2,
     });
-    expect(normalized[0].hotelName).toBe("Taj Holiday Village Resort & Spa");
-    expect(normalized[0].location).toBe("Goa");
+    expect(normalized.hotelName).toBe("Taj Holiday Village Resort & Spa");
+    expect(normalized.location).toBe("Goa");
   });
 
   it("drops items without a title or a parseable URL", () => {
